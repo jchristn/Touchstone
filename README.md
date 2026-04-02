@@ -1,4 +1,4 @@
-<img src="https://raw.githubusercontent.com/jchristn/touchstone/main/assets/logo-black.png" alt="Touchstone" width="256" height="256">
+<img src="https://raw.githubusercontent.com/jchristn/Touchstone/main/assets/logo-black.png" alt="Touchstone" width="256" height="256">
 
 # Touchstone
 
