@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Touchstone.Core\Touchstone.Core.csproj" />
+  </ItemGroup>
+
+</Project>

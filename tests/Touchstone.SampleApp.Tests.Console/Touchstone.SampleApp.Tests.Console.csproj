@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Touchstone.Cli\Touchstone.Cli.csproj" />
+    <ProjectReference Include="..\..\src\Touchstone.SampleApp\Touchstone.SampleApp.csproj" />
+    <ProjectReference Include="..\Touchstone.SampleApp.Tests.Shared\Touchstone.SampleApp.Tests.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.5" />
+  </ItemGroup>
+
+</Project>

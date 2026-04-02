@@ -1,0 +1,17 @@
+C:\Code\Touchstone\src\Touchstone.Xunit\bin\Debug\net10.0\Touchstone.Xunit.deps.json
+C:\Code\Touchstone\src\Touchstone.Xunit\bin\Debug\net10.0\Touchstone.Xunit.dll
+C:\Code\Touchstone\src\Touchstone.Xunit\bin\Debug\net10.0\Touchstone.Xunit.pdb
+C:\Code\Touchstone\src\Touchstone.Xunit\bin\Debug\net10.0\Touchstone.Core.dll
+C:\Code\Touchstone\src\Touchstone.Xunit\bin\Debug\net10.0\Touchstone.Core.pdb
+C:\Code\Touchstone\src\Touchstone.Xunit\obj\Debug\net10.0\Touchstone.Xunit.csproj.AssemblyReference.cache
+C:\Code\Touchstone\src\Touchstone.Xunit\obj\Debug\net10.0\Touchstone.Xunit.GeneratedMSBuildEditorConfig.editorconfig
+C:\Code\Touchstone\src\Touchstone.Xunit\obj\Debug\net10.0\Touchstone.Xunit.AssemblyInfoInputs.cache
+C:\Code\Touchstone\src\Touchstone.Xunit\obj\Debug\net10.0\Touchstone.Xunit.AssemblyInfo.cs
+C:\Code\Touchstone\src\Touchstone.Xunit\obj\Debug\net10.0\Touchstone.Xunit.csproj.CoreCompileInputs.cache
+C:\Code\Touchstone\src\Touchstone.Xunit\obj\Debug\net10.0\Touchsto.3E7AA69D.Up2Date
+C:\Code\Touchstone\src\Touchstone.Xunit\obj\Debug\net10.0\Touchstone.Xunit.dll
+C:\Code\Touchstone\src\Touchstone.Xunit\obj\Debug\net10.0\refint\Touchstone.Xunit.dll
+C:\Code\Touchstone\src\Touchstone.Xunit\obj\Debug\net10.0\Touchstone.Xunit.pdb
+C:\Code\Touchstone\src\Touchstone.Xunit\obj\Debug\net10.0\ref\Touchstone.Xunit.dll
+C:\Code\Touchstone\src\Touchstone.Xunit\bin\Debug\net10.0\Touchstone.Xunit.runtimeconfig.json
+C:\Code\Touchstone\src\Touchstone.Xunit\obj\Debug\net10.0\Touchstone.Xunit.genruntimeconfig.cache

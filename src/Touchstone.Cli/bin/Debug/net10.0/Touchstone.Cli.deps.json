@@ -1,0 +1,39 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "Touchstone.Cli/0.1.0": {
+        "dependencies": {
+          "Touchstone.Core": "0.1.0"
+        },
+        "runtime": {
+          "Touchstone.Cli.dll": {}
+        }
+      },
+      "Touchstone.Core/0.1.0": {
+        "runtime": {
+          "Touchstone.Core.dll": {
+            "assemblyVersion": "0.1.0.0",
+            "fileVersion": "0.1.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "Touchstone.Cli/0.1.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Touchstone.Core/0.1.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

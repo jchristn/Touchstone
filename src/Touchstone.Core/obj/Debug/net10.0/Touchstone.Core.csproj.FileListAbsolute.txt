@@ -1,0 +1,11 @@
+C:\Code\Touchstone\src\Touchstone.Core\bin\Debug\net10.0\Touchstone.Core.deps.json
+C:\Code\Touchstone\src\Touchstone.Core\bin\Debug\net10.0\Touchstone.Core.dll
+C:\Code\Touchstone\src\Touchstone.Core\bin\Debug\net10.0\Touchstone.Core.pdb
+C:\Code\Touchstone\src\Touchstone.Core\obj\Debug\net10.0\Touchstone.Core.GeneratedMSBuildEditorConfig.editorconfig
+C:\Code\Touchstone\src\Touchstone.Core\obj\Debug\net10.0\Touchstone.Core.AssemblyInfoInputs.cache
+C:\Code\Touchstone\src\Touchstone.Core\obj\Debug\net10.0\Touchstone.Core.AssemblyInfo.cs
+C:\Code\Touchstone\src\Touchstone.Core\obj\Debug\net10.0\Touchstone.Core.csproj.CoreCompileInputs.cache
+C:\Code\Touchstone\src\Touchstone.Core\obj\Debug\net10.0\Touchstone.Core.dll
+C:\Code\Touchstone\src\Touchstone.Core\obj\Debug\net10.0\refint\Touchstone.Core.dll
+C:\Code\Touchstone\src\Touchstone.Core\obj\Debug\net10.0\Touchstone.Core.pdb
+C:\Code\Touchstone\src\Touchstone.Core\obj\Debug\net10.0\ref\Touchstone.Core.dll

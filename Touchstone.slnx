@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Touchstone.Cli/Touchstone.Cli.csproj" />
+    <Project Path="src/Touchstone.Core/Touchstone.Core.csproj" />
+    <Project Path="src/Touchstone.SampleApp/Touchstone.SampleApp.csproj" />
+    <Project Path="src/Touchstone.Xunit/Touchstone.Xunit.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Touchstone.SampleApp.Tests.Console/Touchstone.SampleApp.Tests.Console.csproj" />
+    <Project Path="tests/Touchstone.SampleApp.Tests.Shared/Touchstone.SampleApp.Tests.Shared.csproj" />
+    <Project Path="tests/Touchstone.SampleApp.Tests.Xunit/Touchstone.SampleApp.Tests.Xunit.csproj" />
+  </Folder>
+</Solution>

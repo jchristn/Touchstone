@@ -1,0 +1,15 @@
+C:\Code\Touchstone\src\Touchstone.Cli\bin\Debug\net10.0\Touchstone.Cli.deps.json
+C:\Code\Touchstone\src\Touchstone.Cli\bin\Debug\net10.0\Touchstone.Cli.dll
+C:\Code\Touchstone\src\Touchstone.Cli\bin\Debug\net10.0\Touchstone.Cli.pdb
+C:\Code\Touchstone\src\Touchstone.Cli\bin\Debug\net10.0\Touchstone.Core.dll
+C:\Code\Touchstone\src\Touchstone.Cli\bin\Debug\net10.0\Touchstone.Core.pdb
+C:\Code\Touchstone\src\Touchstone.Cli\obj\Debug\net10.0\Touchstone.Cli.csproj.AssemblyReference.cache
+C:\Code\Touchstone\src\Touchstone.Cli\obj\Debug\net10.0\Touchstone.Cli.GeneratedMSBuildEditorConfig.editorconfig
+C:\Code\Touchstone\src\Touchstone.Cli\obj\Debug\net10.0\Touchstone.Cli.AssemblyInfoInputs.cache
+C:\Code\Touchstone\src\Touchstone.Cli\obj\Debug\net10.0\Touchstone.Cli.AssemblyInfo.cs
+C:\Code\Touchstone\src\Touchstone.Cli\obj\Debug\net10.0\Touchstone.Cli.csproj.CoreCompileInputs.cache
+C:\Code\Touchstone\src\Touchstone.Cli\obj\Debug\net10.0\Touchsto.13A4319A.Up2Date
+C:\Code\Touchstone\src\Touchstone.Cli\obj\Debug\net10.0\Touchstone.Cli.dll
+C:\Code\Touchstone\src\Touchstone.Cli\obj\Debug\net10.0\refint\Touchstone.Cli.dll
+C:\Code\Touchstone\src\Touchstone.Cli\obj\Debug\net10.0\Touchstone.Cli.pdb
+C:\Code\Touchstone\src\Touchstone.Cli\obj\Debug\net10.0\ref\Touchstone.Cli.dll
