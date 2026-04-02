@@ -7,8 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Touchstone.Xunit\Touchstone.Xunit.csproj" />
-    <ProjectReference Include="..\Touchstone.SampleApp.Tests.Shared\Touchstone.SampleApp.Tests.Shared.csproj" />
+    <ProjectReference Include="..\..\src\Touchstone.Core\Touchstone.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

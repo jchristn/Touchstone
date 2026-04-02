@@ -1,91 +1,94 @@
-using System.Net;
-using System.Net.Http.Json;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.Logging;
-using Touchstone.Core;
-using Touchstone.SampleApp;
-
-namespace Touchstone.SampleApp.Tests.Shared;
-
-public static class SampleAppSuites
+namespace Touchstone.SampleApp.Tests.Shared
 {
-    public static IReadOnlyList<TestSuiteDescriptor> All => [HealthSuite(), NotesSuite()];
+    using System;
+    using System.Collections.Generic;
+    using System.Net;
+    using System.Net.Http;
+    using System.Net.Http.Json;
+    using System.Threading;
+    using System.Threading.Tasks;
 
-    public static TestSuiteDescriptor HealthSuite()
+    using Microsoft.AspNetCore.Hosting;
+    using Microsoft.AspNetCore.Mvc.Testing;
+    using Microsoft.Extensions.Logging;
+
+    using Touchstone.Core;
+
+    /// <summary>
+    /// Shared test suite descriptors for the sample Notes API.
+    /// </summary>
+    public static class SampleAppSuites
     {
-        var factory = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(b =>
-            {
-                b.UseContentRoot(AppContext.BaseDirectory);
-                b.ConfigureLogging(logging =>
+        /// <summary>
+        /// When set to true, includes an intentionally failing test case for verifying failure rendering.
+        /// </summary>
+        public static bool IncludeFailureToggle { get; set; } = false;
+
+        /// <summary>
+        /// All suites for the sample app.
+        /// </summary>
+        public static IReadOnlyList<TestSuiteDescriptor> All
+        {
+            get { return new List<TestSuiteDescriptor> { HealthSuite(), NotesSuite() }; }
+        }
+
+        /// <summary>
+        /// Health endpoint suite.
+        /// </summary>
+        /// <returns>Suite descriptor for health checks.</returns>
+        public static TestSuiteDescriptor HealthSuite()
+        {
+            WebApplicationFactory<Program> factory = CreateFactory();
+            HttpClient client = factory.CreateClient();
+
+            return new TestSuiteDescriptor(
+                suiteId: "Health",
+                displayName: "Health Endpoint",
+                afterSuiteAsync: ct =>
                 {
-                    logging.ClearProviders();
-                    logging.SetMinimumLevel(LogLevel.Warning);
-                });
-            });
-        var client = factory.CreateClient();
-
-        return new TestSuiteDescriptor(
-            suiteId: "Health",
-            displayName: "Health Endpoint",
-            afterSuiteAsync: ct =>
-            {
-                client.Dispose();
-                return factory.DisposeAsync();
-            },
-            cases:
-            [
-                new TestCaseDescriptor(
-                    suiteId: "Health",
-                    caseId: "ReturnsOk",
-                    displayName: "GET /health returns 200 OK",
-                    executeAsync: async ct =>
-                    {
-                        var response = await client.GetAsync("/health", ct);
-                        Assert(response.StatusCode == HttpStatusCode.OK,
-                            $"Expected 200 OK but got {(int)response.StatusCode}");
-                    }),
-            ]);
-    }
-
-    public static TestSuiteDescriptor NotesSuite()
-    {
-        var factory = new WebApplicationFactory<Program>()
-            .WithWebHostBuilder(b =>
-            {
-                b.UseContentRoot(AppContext.BaseDirectory);
-                b.ConfigureLogging(logging =>
+                    client.Dispose();
+                    return factory.DisposeAsync();
+                },
+                cases: new List<TestCaseDescriptor>
                 {
-                    logging.ClearProviders();
-                    logging.SetMinimumLevel(LogLevel.Warning);
+                    new TestCaseDescriptor(
+                        suiteId: "Health",
+                        caseId: "ReturnsOk",
+                        displayName: "GET /health returns 200 OK",
+                        executeAsync: async ct =>
+                        {
+                            HttpResponseMessage response = await client.GetAsync("/health", ct);
+                            AssertEqual(HttpStatusCode.OK, response.StatusCode);
+                        }),
                 });
-            });
-        var client = factory.CreateClient();
+        }
 
-        return new TestSuiteDescriptor(
-            suiteId: "Notes",
-            displayName: "Notes CRUD",
-            afterSuiteAsync: ct =>
+        /// <summary>
+        /// Notes CRUD suite.
+        /// </summary>
+        /// <returns>Suite descriptor for notes operations.</returns>
+        public static TestSuiteDescriptor NotesSuite()
+        {
+            WebApplicationFactory<Program> factory = CreateFactory();
+            HttpClient client = factory.CreateClient();
+
+            List<TestCaseDescriptor> cases = new List<TestCaseDescriptor>
             {
-                client.Dispose();
-                return factory.DisposeAsync();
-            },
-            cases:
-            [
                 new TestCaseDescriptor(
                     suiteId: "Notes",
                     caseId: "CreateReturnsId",
                     displayName: "POST /notes returns a note with an id",
                     executeAsync: async ct =>
                     {
-                        var response = await client.PostAsJsonAsync("/notes",
-                            new { Title = "Test", Body = "Content" }, ct);
-                        Assert(response.StatusCode == HttpStatusCode.Created,
-                            $"Expected 201 Created but got {(int)response.StatusCode}");
+                        HttpResponseMessage response = await client.PostAsJsonAsync(
+                            "/notes",
+                            new { Title = "Test", Body = "Content" },
+                            ct);
+                        AssertEqual(HttpStatusCode.Created, response.StatusCode);
 
-                        var note = await response.Content.ReadFromJsonAsync<NoteResponse>(ct);
-                        Assert(!string.IsNullOrEmpty(note?.Id), "Note id should not be empty");
+                        NoteResponse note = await response.Content.ReadFromJsonAsync<NoteResponse>(ct);
+                        if (note == null || string.IsNullOrEmpty(note.Id))
+                            throw new InvalidOperationException("Note id should not be empty");
                     }),
 
                 new TestCaseDescriptor(
@@ -94,18 +97,19 @@ public static class SampleAppSuites
                     displayName: "GET /notes/{id} returns the stored payload",
                     executeAsync: async ct =>
                     {
-                        var createResponse = await client.PostAsJsonAsync("/notes",
-                            new { Title = "Fetch Me", Body = "Payload" }, ct);
-                        var created = await createResponse.Content.ReadFromJsonAsync<NoteResponse>(ct)
-                            ?? throw new InvalidOperationException("Failed to deserialize created note");
+                        HttpResponseMessage createResponse = await client.PostAsJsonAsync(
+                            "/notes",
+                            new { Title = "Fetch Me", Body = "Payload" },
+                            ct);
+                        NoteResponse created = await DeserializeOrThrow(createResponse, ct);
 
-                        var response = await client.GetAsync($"/notes/{created.Id}", ct);
-                        Assert(response.StatusCode == HttpStatusCode.OK,
-                            $"Expected 200 OK but got {(int)response.StatusCode}");
+                        HttpResponseMessage response = await client.GetAsync("/notes/" + created.Id, ct);
+                        AssertEqual(HttpStatusCode.OK, response.StatusCode);
 
-                        var fetched = await response.Content.ReadFromJsonAsync<NoteResponse>(ct);
-                        Assert(fetched?.Title == "Fetch Me",
-                            $"Expected title 'Fetch Me' but got '{fetched?.Title}'");
+                        NoteResponse fetched = await DeserializeOrThrow(response, ct);
+                        if (fetched.Title != "Fetch Me")
+                            throw new InvalidOperationException(
+                                "Expected title 'Fetch Me' but got '" + fetched.Title + "'");
                     }),
 
                 new TestCaseDescriptor(
@@ -114,18 +118,17 @@ public static class SampleAppSuites
                     displayName: "DELETE /notes/{id} removes the note",
                     executeAsync: async ct =>
                     {
-                        var createResponse = await client.PostAsJsonAsync("/notes",
-                            new { Title = "Delete Me", Body = "Gone" }, ct);
-                        var created = await createResponse.Content.ReadFromJsonAsync<NoteResponse>(ct)
-                            ?? throw new InvalidOperationException("Failed to deserialize created note");
+                        HttpResponseMessage createResponse = await client.PostAsJsonAsync(
+                            "/notes",
+                            new { Title = "Delete Me", Body = "Gone" },
+                            ct);
+                        NoteResponse created = await DeserializeOrThrow(createResponse, ct);
 
-                        var deleteResponse = await client.DeleteAsync($"/notes/{created.Id}", ct);
-                        Assert(deleteResponse.StatusCode == HttpStatusCode.NoContent,
-                            $"Expected 204 NoContent but got {(int)deleteResponse.StatusCode}");
+                        HttpResponseMessage deleteResponse = await client.DeleteAsync("/notes/" + created.Id, ct);
+                        AssertEqual(HttpStatusCode.NoContent, deleteResponse.StatusCode);
 
-                        var fetchResponse = await client.GetAsync($"/notes/{created.Id}", ct);
-                        Assert(fetchResponse.StatusCode == HttpStatusCode.NotFound,
-                            $"Expected 404 after delete but got {(int)fetchResponse.StatusCode}");
+                        HttpResponseMessage fetchResponse = await client.GetAsync("/notes/" + created.Id, ct);
+                        AssertEqual(HttpStatusCode.NotFound, fetchResponse.StatusCode);
                     }),
 
                 new TestCaseDescriptor(
@@ -134,9 +137,8 @@ public static class SampleAppSuites
                     displayName: "GET /notes/{id} for missing note returns 404",
                     executeAsync: async ct =>
                     {
-                        var response = await client.GetAsync("/notes/nonexistent", ct);
-                        Assert(response.StatusCode == HttpStatusCode.NotFound,
-                            $"Expected 404 NotFound but got {(int)response.StatusCode}");
+                        HttpResponseMessage response = await client.GetAsync("/notes/nonexistent", ct);
+                        AssertEqual(HttpStatusCode.NotFound, response.StatusCode);
                     }),
 
                 new TestCaseDescriptor(
@@ -145,10 +147,11 @@ public static class SampleAppSuites
                     displayName: "POST /notes with empty body returns 400",
                     executeAsync: async ct =>
                     {
-                        var response = await client.PostAsJsonAsync("/notes",
-                            new { Title = "", Body = "" }, ct);
-                        Assert(response.StatusCode == HttpStatusCode.BadRequest,
-                            $"Expected 400 BadRequest but got {(int)response.StatusCode}");
+                        HttpResponseMessage response = await client.PostAsJsonAsync(
+                            "/notes",
+                            new { Title = "", Body = "" },
+                            ct);
+                        AssertEqual(HttpStatusCode.BadRequest, response.StatusCode);
                     }),
 
                 new TestCaseDescriptor(
@@ -158,14 +161,57 @@ public static class SampleAppSuites
                     skip: true,
                     skipReason: "Pagination not yet implemented",
                     executeAsync: _ => Task.CompletedTask),
-            ]);
-    }
+            };
 
-    private static void Assert(bool condition, string message)
-    {
-        if (!condition)
-            throw new InvalidOperationException(message);
-    }
+            if (IncludeFailureToggle)
+            {
+                cases.Add(new TestCaseDescriptor(
+                    suiteId: "Notes",
+                    caseId: "IntentionalFailure",
+                    displayName: "Intentional failure for verifying failure rendering",
+                    executeAsync: _ => throw new InvalidOperationException("This test intentionally fails.")));
+            }
 
-    private sealed record NoteResponse(string Id, string Title, string Body);
+            return new TestSuiteDescriptor(
+                suiteId: "Notes",
+                displayName: "Notes CRUD",
+                afterSuiteAsync: ct =>
+                {
+                    client.Dispose();
+                    return factory.DisposeAsync();
+                },
+                cases: cases);
+        }
+
+        private static WebApplicationFactory<Program> CreateFactory()
+        {
+            return new WebApplicationFactory<Program>()
+                .WithWebHostBuilder(b =>
+                {
+                    b.UseContentRoot(AppContext.BaseDirectory);
+                    b.ConfigureLogging(logging =>
+                    {
+                        logging.ClearProviders();
+                        logging.SetMinimumLevel(LogLevel.Warning);
+                    });
+                });
+        }
+
+        private static void AssertEqual(HttpStatusCode expected, HttpStatusCode actual)
+        {
+            if (expected != actual)
+                throw new InvalidOperationException(
+                    "Expected " + (int)expected + " " + expected + " but got " + (int)actual + " " + actual);
+        }
+
+        private static async Task<NoteResponse> DeserializeOrThrow(
+            HttpResponseMessage response,
+            CancellationToken cancellationToken)
+        {
+            NoteResponse result = await response.Content.ReadFromJsonAsync<NoteResponse>(cancellationToken);
+            if (result == null)
+                throw new InvalidOperationException("Failed to deserialize response");
+            return result;
+        }
+    }
 }

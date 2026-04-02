@@ -1,21 +1,27 @@
 <Project>
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
+    <Nullable>disable</Nullable>
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
-  <!-- Package metadata placeholders -->
   <PropertyGroup>
-    <Authors>Touchstone Contributors</Authors>
-    <Company>Touchstone</Company>
+    <Version>0.1.0</Version>
+    <Authors>jchristn</Authors>
+    <Company>Joel Christner</Company>
+    <Copyright>(c)2026 Joel Christner</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/jchristn/touchstone</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/jchristn/touchstone</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <Description>Touchstone - runner-agnostic test descriptor framework</Description>
-    <VersionPrefix>0.1.0</VersionPrefix>
+    <PackageIcon>logo-black.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 
 </Project>

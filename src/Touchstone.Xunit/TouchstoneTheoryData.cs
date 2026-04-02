@@ -1,20 +1,45 @@
-using Touchstone.Core;
-using Xunit;
-
-namespace Touchstone.Xunit;
-
-public sealed class TouchstoneTheoryData : TheoryData<TestCaseDescriptor>
+namespace Touchstone.Xunit
 {
-    public TouchstoneTheoryData(TestSuiteDescriptor suite)
-    {
-        foreach (var testCase in suite.Cases)
-            Add(testCase);
-    }
+    using System;
+    using System.Collections.Generic;
 
-    public TouchstoneTheoryData(IEnumerable<TestSuiteDescriptor> suites)
+    using Touchstone.Core;
+    using global::Xunit;
+
+    /// <summary>
+    /// TheoryData source that yields one row per test case descriptor.
+    /// </summary>
+    public sealed class TouchstoneTheoryData : TheoryData<TestCaseDescriptor>
     {
-        foreach (var suite in suites)
-            foreach (var testCase in suite.Cases)
+        /// <summary>
+        /// Initialize theory data from a single suite.
+        /// </summary>
+        /// <param name="suite">Suite whose cases become theory rows.</param>
+        public TouchstoneTheoryData(TestSuiteDescriptor suite)
+        {
+            if (suite == null) throw new ArgumentNullException(nameof(suite));
+
+            foreach (TestCaseDescriptor testCase in suite.Cases)
+            {
                 Add(testCase);
+            }
+        }
+
+        /// <summary>
+        /// Initialize theory data from multiple suites.
+        /// </summary>
+        /// <param name="suites">Suites whose cases become theory rows.</param>
+        public TouchstoneTheoryData(IEnumerable<TestSuiteDescriptor> suites)
+        {
+            if (suites == null) throw new ArgumentNullException(nameof(suites));
+
+            foreach (TestSuiteDescriptor suite in suites)
+            {
+                foreach (TestCaseDescriptor testCase in suite.Cases)
+                {
+                    Add(testCase);
+                }
+            }
+        }
     }
 }
