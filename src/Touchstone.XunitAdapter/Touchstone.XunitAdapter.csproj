@@ -3,6 +3,7 @@
   <PropertyGroup>
     <Description>xUnit adapters for Touchstone. Run shared test descriptors under dotnet test using theory-driven or fact-style patterns.</Description>
     <PackageTags>testing;xunit;test-adapter;descriptors</PackageTags>
+    <IsPackable>true</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
