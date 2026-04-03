@@ -11,6 +11,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Touchstone.Core: runner-agnostic test descriptor model (TestCaseDescriptor, TestSuiteDescriptor, TestResult, TestRunSummary, ITestResultSink, TestExecutor)
 - Touchstone.Cli: console test runner with colored tabular output, JSON export, and exit code contract
-- Touchstone.Xunit: xUnit adapters (theory-driven and fact-style) for running shared descriptors under dotnet test
+- Touchstone.XunitAdapter: xUnit adapters (theory-driven and fact-style) for running shared descriptors under dotnet test
 - Touchstone.SampleApp: reference Notes CRUD API with shared integration tests exercising both runners
 - Multi-target support for net8.0 and net10.0

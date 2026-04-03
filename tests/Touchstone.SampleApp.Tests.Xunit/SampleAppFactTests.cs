@@ -5,7 +5,7 @@ namespace Touchstone.SampleApp.Tests.Xunit
 
     using Touchstone.Core;
     using Touchstone.SampleApp.Tests.Shared;
-    using Touchstone.Xunit;
+    using Touchstone.XunitAdapter;
     using global::Xunit;
 
     /// <summary>

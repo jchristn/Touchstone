@@ -31,7 +31,7 @@ The core idea is simple: a test is a description (name, identity, execution dele
 | **Touchstone** | Metapackage that includes Core, Cli, and Xunit. Install this to get everything. |
 | **Touchstone.Core** | Runner-agnostic descriptor model, execution engine, and result types. No third-party dependencies. |
 | **Touchstone.Cli** | Console test runner with colored tabular output, JSON export, and exit code contract. |
-| **Touchstone.Xunit** | xUnit adapters (theory-driven and fact-style) for running shared descriptors under `dotnet test`. |
+| **Touchstone.XunitAdapter** | xUnit adapters (theory-driven and fact-style) for running shared descriptors under `dotnet test`. |
 
 ## Getting Started
 
@@ -53,7 +53,7 @@ dotnet add package Touchstone.Core
 dotnet add package Touchstone.Cli
 
 # xUnit test project
-dotnet add package Touchstone.Xunit
+dotnet add package Touchstone.XunitAdapter
 ```
 
 ### 2. Define Test Descriptors
@@ -143,7 +143,7 @@ return await ConsoleRunner.RunAsync(MyApiSuites.All, resultsPath: "results.json"
 
 ### 4. Run via xUnit
 
-Create an xUnit test project that references your shared test library and `Touchstone.Xunit`. Use the **theory-driven** pattern to get one xUnit test per descriptor:
+Create an xUnit test project that references your shared test library and `Touchstone.XunitAdapter`. Use the **theory-driven** pattern to get one xUnit test per descriptor:
 
 ```csharp
 using System.Collections.Generic;
@@ -179,7 +179,7 @@ Or use the **fact-style** pattern to run all descriptors as a single `[Fact]`:
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Touchstone.Core;
-using Touchstone.Xunit;
+using Touchstone.XunitAdapter;
 using Xunit;
 
 public sealed class MyApiFactTests : TouchstoneFactBase

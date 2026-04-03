@@ -1,4 +1,4 @@
-namespace Touchstone.Xunit
+namespace Touchstone.XunitAdapter
 {
     using System;
     using System.Collections.Generic;

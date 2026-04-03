@@ -1,10 +1,10 @@
-namespace Touchstone.Xunit
+namespace Touchstone.XunitAdapter
 {
     using System;
     using System.Collections.Generic;
 
     using Touchstone.Core;
-    using global::Xunit;
+    using Xunit;
 
     /// <summary>
     /// TheoryData source that yields one row per test case descriptor.

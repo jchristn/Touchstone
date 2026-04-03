@@ -1,9 +1,9 @@
-namespace Touchstone.Xunit
+namespace Touchstone.XunitAdapter
 {
     using System.Collections.Generic;
 
     using Touchstone.Core;
-    using global::Xunit;
+    using Xunit;
 
     /// <summary>
     /// Base class for theory-driven Touchstone test classes.
