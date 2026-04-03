@@ -28,6 +28,7 @@ The core idea is simple: a test is a description (name, identity, execution dele
 
 | Package | Description |
 |---|---|
+| **Touchstone** | Metapackage that includes Core, Cli, and Xunit. Install this to get everything. |
 | **Touchstone.Core** | Runner-agnostic descriptor model, execution engine, and result types. No third-party dependencies. |
 | **Touchstone.Cli** | Console test runner with colored tabular output, JSON export, and exit code contract. |
 | **Touchstone.Xunit** | xUnit adapters (theory-driven and fact-style) for running shared descriptors under `dotnet test`. |
@@ -36,7 +37,13 @@ The core idea is simple: a test is a description (name, identity, execution dele
 
 ### 1. Install Packages
 
-Add the packages you need to your projects:
+The simplest approach is to install the metapackage, which includes everything:
+
+```bash
+dotnet add package Touchstone
+```
+
+Or install only the packages you need:
 
 ```bash
 # Shared test descriptor library (no runner dependency)

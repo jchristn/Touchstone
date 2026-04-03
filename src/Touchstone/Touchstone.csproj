@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Runner-agnostic test descriptor framework for .NET. Includes Core, Cli, and Xunit packages.</Description>
+    <PackageTags>testing;test-framework;test-runner;descriptors;xunit;console</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Touchstone.Core\Touchstone.Core.csproj" />
+    <ProjectReference Include="..\Touchstone.Cli\Touchstone.Cli.csproj" />
+    <ProjectReference Include="..\Touchstone.Xunit\Touchstone.Xunit.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\assets\logo-black.png" Pack="true" PackagePath="\" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>
