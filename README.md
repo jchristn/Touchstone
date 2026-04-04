@@ -4,7 +4,7 @@
 
 Runner-agnostic test descriptor framework for .NET.
 
-v0.1.1
+v0.1.12
 
 ## What is Touchstone?
 
