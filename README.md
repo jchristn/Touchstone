@@ -211,6 +211,120 @@ Run through the standard xUnit pipeline:
 dotnet test
 ```
 
+### 5. Run via NUnit
+
+Create an NUnit test project that references your shared test library and `Touchstone.NunitAdapter`. Use **TestCaseSource** to get one NUnit test per descriptor:
+
+```csharp
+using System.Collections;
+using System.Threading;
+using System.Threading.Tasks;
+using NUnit.Framework;
+using Touchstone.Core;
+using Touchstone.NunitAdapter;
+
+[TestFixture]
+public sealed class MyApiNunitTests
+{
+    private static IEnumerable TestCases()
+    {
+        return new TouchstoneTestCaseSource(MyApiSuites.All);
+    }
+
+    [Test]
+    [TestCaseSource(nameof(TestCases))]
+    public async Task RunTest(TestCaseDescriptor testCase)
+    {
+        await testCase.ExecuteAsync(CancellationToken.None);
+    }
+}
+```
+
+Or use the **single-test** pattern to run all descriptors in one `[Test]`:
+
+```csharp
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using NUnit.Framework;
+using Touchstone.Core;
+using Touchstone.NunitAdapter;
+
+[TestFixture]
+public sealed class MyApiNunitFactTests : TouchstoneNunitBase
+{
+    protected override IReadOnlyList<TestSuiteDescriptor> Suites
+    {
+        get { return MyApiSuites.All; }
+    }
+
+    [Test]
+    public async Task RunAll()
+    {
+        await RunAllAsync();
+    }
+}
+```
+
+### 6. Run via MSTest
+
+Create an MSTest test project that references your shared test library and `Touchstone.MstestAdapter`. Use **DynamicData** to get one MSTest test per descriptor:
+
+```csharp
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Touchstone.Core;
+using Touchstone.MstestAdapter;
+
+[TestClass]
+public sealed class MyApiMstestTests
+{
+    public static IEnumerable<object[]> TestCases()
+    {
+        return TouchstoneDynamicData.FromSuites(MyApiSuites.All);
+    }
+
+    [TestMethod]
+    [DynamicData(nameof(TestCases))]
+    public async Task RunTest(TestCaseDescriptor testCase)
+    {
+        await testCase.ExecuteAsync(CancellationToken.None);
+    }
+}
+```
+
+Or use the **single-test** pattern to run all descriptors in one `[TestMethod]`:
+
+```csharp
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Touchstone.Core;
+using Touchstone.MstestAdapter;
+
+[TestClass]
+public sealed class MyApiMstestFactTests : TouchstoneMstestBase
+{
+    protected override IReadOnlyList<TestSuiteDescriptor> Suites
+    {
+        get { return MyApiSuites.All; }
+    }
+
+    [TestMethod]
+    public async Task RunAll()
+    {
+        await RunAllAsync();
+    }
+}
+```
+
+All framework adapters work with `dotnet test`:
+
+```bash
+dotnet test
+```
+
 ## Console Runner Output
 
 The console runner produces a three-column tabular summary:
