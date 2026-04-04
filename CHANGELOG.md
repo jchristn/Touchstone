@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.1.1] - 2026-04-03
+
+### Added
+
+- Touchstone.NunitAdapter: NUnit adapter (TestCaseSource-driven and single-test) for running shared descriptors under NUnit
+- Touchstone.MstestAdapter: MSTest adapter (DynamicData-driven and single-test) for running shared descriptors under MSTest
+- Sample app test hosts for NUnit and MSTest
+- Touchstone metapackage now includes all five adapter packages
+
 ## [v0.1.0] - 2026-04-02
 
 ### Added

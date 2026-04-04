@@ -4,7 +4,7 @@
 
 Runner-agnostic test descriptor framework for .NET.
 
-v0.1.0
+v0.1.1
 
 ## What is Touchstone?
 
@@ -14,7 +14,7 @@ The core idea is simple: a test is a description (name, identity, execution dele
 
 ## Why Touchstone?
 
-- **Write once, run anywhere** -- the same test descriptors work in xUnit, the console runner, or any custom runner you build.
+- **Write once, run anywhere** -- the same test descriptors work in xUnit, NUnit, MSTest, the console runner, or any custom runner you build.
 - **Clean separation between test definitions and test execution** -- descriptors live in a shared project with no runner dependencies.
 - **Readable local output without needing `dotnet test`** -- the console runner produces colored, tabular results directly in your terminal.
 - **No lock-in to a specific test framework** -- switch runners without rewriting tests.
@@ -28,10 +28,12 @@ The core idea is simple: a test is a description (name, identity, execution dele
 
 | Package | Description |
 |---|---|
-| **Touchstone** | Metapackage that includes Core, Cli, and Xunit. Install this to get everything. |
+| **Touchstone** | Metapackage that includes Core, Cli, and all framework adapters. Install this to get everything. |
 | **Touchstone.Core** | Runner-agnostic descriptor model, execution engine, and result types. No third-party dependencies. |
 | **Touchstone.Cli** | Console test runner with colored tabular output, JSON export, and exit code contract. |
 | **Touchstone.XunitAdapter** | xUnit adapters (theory-driven and fact-style) for running shared descriptors under `dotnet test`. |
+| **Touchstone.NunitAdapter** | NUnit adapter (TestCaseSource-driven and single-test) for running shared descriptors under NUnit. |
+| **Touchstone.MstestAdapter** | MSTest adapter (DynamicData-driven and single-test) for running shared descriptors under MSTest. |
 
 ## Getting Started
 
@@ -54,6 +56,12 @@ dotnet add package Touchstone.Cli
 
 # xUnit test project
 dotnet add package Touchstone.XunitAdapter
+
+# NUnit test project
+dotnet add package Touchstone.NunitAdapter
+
+# MSTest test project
+dotnet add package Touchstone.MstestAdapter
 ```
 
 ### 2. Define Test Descriptors

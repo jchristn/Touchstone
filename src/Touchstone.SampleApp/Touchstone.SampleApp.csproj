@@ -3,6 +3,8 @@
   <PropertyGroup>
     <TargetFrameworks>net10.0</TargetFrameworks>
     <IsPackable>false</IsPackable>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+    <WarnOnPackingNonPackableProject>false</WarnOnPackingNonPackableProject>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
 

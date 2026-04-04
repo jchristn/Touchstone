@@ -2,6 +2,8 @@
   <Folder Name="/src/">
     <Project Path="src/Touchstone.Cli/Touchstone.Cli.csproj" />
     <Project Path="src/Touchstone.Core/Touchstone.Core.csproj" />
+    <Project Path="src/Touchstone.MstestAdapter/Touchstone.MstestAdapter.csproj" />
+    <Project Path="src/Touchstone.NunitAdapter/Touchstone.NunitAdapter.csproj" />
     <Project Path="src/Touchstone.SampleApp/Touchstone.SampleApp.csproj" />
     <Project Path="src/Touchstone.XunitAdapter/Touchstone.XunitAdapter.csproj" />
     <Project Path="src/Touchstone/Touchstone.csproj" />
@@ -9,6 +11,8 @@
   <Folder Name="/tests/">
     <Project Path="tests/Touchstone.Core.Tests/Touchstone.Core.Tests.csproj" />
     <Project Path="tests/Touchstone.SampleApp.Tests.Console/Touchstone.SampleApp.Tests.Console.csproj" />
+    <Project Path="tests/Touchstone.SampleApp.Tests.Mstest/Touchstone.SampleApp.Tests.Mstest.csproj" />
+    <Project Path="tests/Touchstone.SampleApp.Tests.Nunit/Touchstone.SampleApp.Tests.Nunit.csproj" />
     <Project Path="tests/Touchstone.SampleApp.Tests.Shared/Touchstone.SampleApp.Tests.Shared.csproj" />
     <Project Path="tests/Touchstone.SampleApp.Tests.Xunit/Touchstone.SampleApp.Tests.Xunit.csproj" />
   </Folder>

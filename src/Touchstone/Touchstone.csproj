@@ -1,14 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <Description>Runner-agnostic test descriptor framework for .NET. Includes Core, Cli, and Xunit packages.</Description>
-    <PackageTags>testing;test-framework;test-runner;descriptors;xunit;console</PackageTags>
+    <Description>Runner-agnostic test descriptor framework for .NET. Includes Core, Cli, XunitAdapter, NunitAdapter, and MstestAdapter packages.</Description>
+    <PackageTags>testing;test-framework;test-runner;descriptors;xunit;nunit;mstest;console</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Touchstone.Core\Touchstone.Core.csproj" />
     <ProjectReference Include="..\Touchstone.Cli\Touchstone.Cli.csproj" />
     <ProjectReference Include="..\Touchstone.XunitAdapter\Touchstone.XunitAdapter.csproj" />
+    <ProjectReference Include="..\Touchstone.NunitAdapter\Touchstone.NunitAdapter.csproj" />
+    <ProjectReference Include="..\Touchstone.MstestAdapter\Touchstone.MstestAdapter.csproj" />
   </ItemGroup>
 
   <ItemGroup>
