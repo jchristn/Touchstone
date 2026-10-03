@@ -6,7 +6,7 @@ if "%~1"=="" (
 )
 
 set APIKEY=%~1
-set VERSION=0.2.0
+set VERSION=0.2.1
 
 echo ============================================================================
 echo  Building Release

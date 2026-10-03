@@ -4,7 +4,7 @@
 
 Runner-agnostic test descriptor framework for .NET.
 
-v0.2.0
+v0.2.1
 
 ## What is Touchstone?
 
@@ -33,8 +33,8 @@ The core idea is simple: a test is a description (name, identity, execution dele
 | **Touchstone.Core** | Runner-agnostic descriptor model, execution engine, and result types. No third-party dependencies. |
 | **Touchstone.Cli** | Console test runner with colored tabular output, JSON export, and exit code contract. |
 | **Touchstone.XunitAdapter** | xUnit adapters (theory-driven and fact-style) for running shared descriptors under `dotnet test`. |
-| **Touchstone.NunitAdapter** | NUnit adapter (TestCaseSource-driven and single-test) for running shared descriptors under NUnit. |
-| **Touchstone.MstestAdapter** | MSTest adapter (DynamicData-driven and single-test) for running shared descriptors under MSTest. |
+| **Touchstone.NunitAdapter** | NUnit adapter (TestCaseSource-driven and single-test) for running shared descriptors under NUnit. Requires NUnit 5.0 or later. |
+| **Touchstone.MstestAdapter** | MSTest adapter (DynamicData-driven and single-test) for running shared descriptors under MSTest. Requires MSTest.TestFramework 4.4 or later. |
 
 ## Getting Started
 

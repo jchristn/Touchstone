@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.2.1] - 2026-10-03
+
+### Changed
+
+- Touchstone.NunitAdapter now depends on NUnit 5.0.0 (was 4.3.2). Consumers must reference NUnit 5 or later
+- Touchstone.MstestAdapter now depends on MSTest.TestFramework 4.4.1 (was 4.0.2)
+- Test and sample projects: MSTest 4.4.1, NUnit 5.0.0, NUnit.Analyzers 4.15.0, NUnit3TestAdapter 6.3.0, xunit.runner.visualstudio 4.0.0, Microsoft.NET.Test.Sdk 18.10.1, coverlet.collector 10.1.0, Microsoft.AspNetCore.Mvc.Testing 10.0.12
+
+### Added
+
+- `AdapterSuites.FrameworkVersionSuite`: verifies the resolved xunit, NUnit, and MSTest.TestFramework versions meet the adapters' minimums
+
 ## [v0.2.0] - 2026-10-02
 
 ### Added

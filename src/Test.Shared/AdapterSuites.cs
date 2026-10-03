@@ -3,6 +3,7 @@ namespace Test.Shared
     using System;
     using System.Collections;
     using System.Collections.Generic;
+    using System.Reflection;
     using System.Threading;
     using System.Threading.Tasks;
     using Touchstone.Core;
@@ -223,6 +224,43 @@ namespace Test.Shared
         {
             return RunAllSuite("MstestBase", "MSTest TouchstoneMstestBase",
                 (suites, ct) => new MstestBaseHarness(suites).InvokeRunAllAsync(ct));
+        }
+
+        /// <summary>
+        /// Suite pinning the minimum host framework versions the adapters are built and tested against.
+        /// </summary>
+        /// <returns>Suite descriptor.</returns>
+        public static TestSuiteDescriptor FrameworkVersionSuite()
+        {
+            const string S = "FrameworkVersion";
+
+            return new TestSuiteDescriptor(S, "Adapter framework versions", new List<TestCaseDescriptor>
+            {
+                CaseBuilder.Sync(S, "Xunit", "xUnit adapter resolves xunit 2.9 or later", () =>
+                {
+                    AssertMinimumVersion(typeof(Xunit.FactAttribute).Assembly, new Version(2, 9), "xunit");
+                }),
+
+                CaseBuilder.Sync(S, "Nunit", "NUnit adapter resolves NUnit 5.0 or later", () =>
+                {
+                    AssertMinimumVersion(typeof(NUnit.Framework.TestAttribute).Assembly, new Version(5, 0), "NUnit");
+                }),
+
+                CaseBuilder.Sync(S, "Mstest", "MSTest adapter resolves MSTest.TestFramework 4.4 or later", () =>
+                {
+                    AssertMinimumVersion(typeof(Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute).Assembly, new Version(4, 4), "MSTest.TestFramework");
+                }),
+            });
+        }
+
+        private static void AssertMinimumVersion(Assembly assembly, Version minimum, string context)
+        {
+            string? informational = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+            TestAssert.NotNull(informational, context + " informational version");
+
+            string numeric = informational!.Split('+', '-')[0];
+            TestAssert.True(Version.TryParse(numeric, out Version? actual), context + " version '" + informational + "' is parseable");
+            TestAssert.True(actual! >= minimum, context + " version " + actual + " is at least " + minimum);
         }
 
         private static TestSuiteDescriptor RunAllSuite(
