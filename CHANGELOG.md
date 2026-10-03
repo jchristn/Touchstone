@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Test.Shared, Test.Automated, Test.Xunit, Test.Nunit, and Test.Mstest projects. All runners execute the same shared suites covering descriptors, result models, the executor, the console runner and sink, JSON export, and every framework adapter, with positive and negative cases
+
+### Fixed
+
+- Touchstone.XunitAdapter no longer gets picked up as a test project by `dotnet test` at the solution level
+
+### Removed
+
+- tests/Touchstone.Core.Tests (its cases were migrated into Test.Shared)
+
 ## [v0.1.12] - 2026-04-03
 
 ### Changed

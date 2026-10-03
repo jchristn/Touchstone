@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!--
+    Touchstone is the project under test, so the shared suites reference the source projects
+    rather than the published Touchstone NuGet packages. Referencing both would produce two
+    assemblies with the same identity (Touchstone.Core 0.1.12), which cannot coexist.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Touchstone.Core\Touchstone.Core.csproj" />
+    <ProjectReference Include="..\Touchstone.Cli\Touchstone.Cli.csproj" />
+    <ProjectReference Include="..\Touchstone.XunitAdapter\Touchstone.XunitAdapter.csproj" />
+    <ProjectReference Include="..\Touchstone.NunitAdapter\Touchstone.NunitAdapter.csproj" />
+    <ProjectReference Include="..\Touchstone.MstestAdapter\Touchstone.MstestAdapter.csproj" />
+  </ItemGroup>
+
+</Project>

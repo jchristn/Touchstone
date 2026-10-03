@@ -1,5 +1,10 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Test.Automated/Test.Automated.csproj" />
+    <Project Path="src/Test.Mstest/Test.Mstest.csproj" />
+    <Project Path="src/Test.Nunit/Test.Nunit.csproj" />
+    <Project Path="src/Test.Shared/Test.Shared.csproj" />
+    <Project Path="src/Test.Xunit/Test.Xunit.csproj" />
     <Project Path="src/Touchstone.Cli/Touchstone.Cli.csproj" />
     <Project Path="src/Touchstone.Core/Touchstone.Core.csproj" />
     <Project Path="src/Touchstone.MstestAdapter/Touchstone.MstestAdapter.csproj" />
@@ -9,7 +14,6 @@
     <Project Path="src/Touchstone/Touchstone.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/Touchstone.Core.Tests/Touchstone.Core.Tests.csproj" />
     <Project Path="tests/Touchstone.SampleApp.Tests.Console/Touchstone.SampleApp.Tests.Console.csproj" />
     <Project Path="tests/Touchstone.SampleApp.Tests.Mstest/Touchstone.SampleApp.Tests.Mstest.csproj" />
     <Project Path="tests/Touchstone.SampleApp.Tests.Nunit/Touchstone.SampleApp.Tests.Nunit.csproj" />

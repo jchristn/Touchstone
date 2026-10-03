@@ -363,9 +363,31 @@ go.bat
 
 The sample app validates the API surface before adopting it in production consumer repos.
 
+## Testing Touchstone
+
+Touchstone tests itself using its own descriptor model. The test projects follow the same layout recommended for consumers:
+
+| Project | Purpose |
+|---|---|
+| `src/Test.Shared` | Central source of truth. Every suite lives here, exposed through `TouchstoneSuites.All`. No console output. |
+| `src/Test.Automated` | Console runner (`ConsoleRunner`) with optional `--results <path>` JSON export. Multi-targeted, so pass `-f net8.0` or `-f net10.0` to `dotnet run`. |
+| `src/Test.Xunit` | Runs the shared suites under xUnit (fact-style and theory-style). |
+| `src/Test.Nunit` | Runs the shared suites under NUnit (single-test and `TestCaseSource`). |
+| `src/Test.Mstest` | Runs the shared suites under MSTest (single-test and `DynamicData`). |
+
+Because Touchstone is the project under test, these projects reference the Touchstone source projects rather than the published NuGet packages. Referencing both would load two assemblies with the same identity.
+
+```bash
+dotnet run --project src/Test.Automated -f net10.0
+dotnet run --project src/Test.Automated -f net8.0 -- --results results.json
+dotnet test src/Test.Xunit
+dotnet test src/Test.Nunit
+dotnet test src/Test.Mstest
+```
+
 ## Target Frameworks
 
-Touchstone targets both **net8.0** and **net10.0**. The library packages (Core, Cli, Xunit) are multi-targeted. Sample and test projects target net10.0.
+Touchstone targets both **net8.0** and **net10.0**. The library packages (Core, Cli, and all adapters) and the `src/Test.*` projects are multi-targeted. The sample app and its test projects target net10.0.
 
 ## Version History
 

@@ -1,13 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net10.0</TargetFrameworks>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
-    <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Touchstone.Core\Touchstone.Core.csproj" />
+    <ProjectReference Include="..\Test.Shared\Test.Shared.csproj" />
+    <ProjectReference Include="..\Touchstone.XunitAdapter\Touchstone.XunitAdapter.csproj" />
   </ItemGroup>
 
   <ItemGroup>
