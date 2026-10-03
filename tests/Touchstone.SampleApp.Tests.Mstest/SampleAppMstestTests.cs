@@ -29,7 +29,7 @@ namespace Touchstone.SampleApp.Tests.Mstest
         [DynamicData(nameof(TestCases))]
         public async Task RunTest(TestCaseDescriptor testCase)
         {
-            await testCase.ExecuteAsync(CancellationToken.None);
+            await TestExecutor.ExecuteCaseAsync(testCase, CancellationToken.None);
         }
     }
 }

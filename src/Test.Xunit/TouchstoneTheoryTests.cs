@@ -53,7 +53,7 @@ namespace Test.Xunit
         public async Task RunTest(TestCaseDescriptor testCase)
         {
             _Output.WriteLine("Running: " + testCase.DisplayName);
-            await testCase.ExecuteAsync(CancellationToken.None);
+            await TestExecutor.ExecuteCaseAsync(testCase, CancellationToken.None);
         }
     }
 }

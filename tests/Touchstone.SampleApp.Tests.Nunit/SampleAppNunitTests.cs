@@ -25,7 +25,7 @@ namespace Touchstone.SampleApp.Tests.Nunit
         [TestCaseSource(nameof(TestCases))]
         public async Task RunTest(TestCaseDescriptor testCase)
         {
-            await testCase.ExecuteAsync(CancellationToken.None);
+            await TestExecutor.ExecuteCaseAsync(testCase, CancellationToken.None);
         }
     }
 }

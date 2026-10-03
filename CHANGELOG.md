@@ -7,9 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.2.0] - 2026-10-02
+
 ### Added
 
+- Telemetry: a `Meter` and `ActivitySource` named `Touchstone` (BCL only, no exporter dependency). Spans for runs, suites, `before_suite`/`after_suite` stages, cases, sink callbacks, and JSON export, with explicit status and exception events. Metrics for run, suite, stage, case, sink, and export counts and durations by outcome, `touchstone.errors` by stage and `error.type`, `touchstone.cases.active`, per-suite and per-run last-success timestamps, and `touchstone.build.info`. See TELEMETRY.md
+- `TouchstoneTelemetry`: public constants for every meter, source, metric, span, label, and attribute name, plus the `SuiteLabelEnabled` setting
+- `TestExecutor.RunAsync`: run several suites under one run span and return an aggregated summary
+- `TestExecutor.ExecuteCaseAsync`: run one case with telemetry and rethrow its exception, for theory-style hosts
+- `TestResultCollector`: an in-memory `ITestResultSink`
+- Telemetry test suite (`src/Test.Shared/TelemetrySuites.cs`) using in-memory listeners, covering every span and metric, the failure paths, a throwing collector, and the no-listener path
 - Test.Shared, Test.Automated, Test.Xunit, Test.Nunit, and Test.Mstest projects. All runners execute the same shared suites covering descriptors, result models, the executor, the console runner and sink, JSON export, and every framework adapter, with positive and negative cases
+
+### Changed
+
+- `ConsoleRunner.RunAsync` and the xUnit, NUnit, and MSTest `RunAllAsync` base methods now run through `TestExecutor.RunAsync`, so they emit telemetry. Behavior and failure messages are unchanged
+- Theory-style test hosts and README examples call `TestExecutor.ExecuteCaseAsync`
+- `TestExecutor` awaits with `ConfigureAwait(false)`
 
 ### Fixed
 

@@ -21,41 +21,18 @@ namespace Touchstone.NunitAdapter
         /// <summary>
         /// Execute every non-skipped test case and collect failures.
         /// Throws an AggregateException when any test fails.
+        /// Runs through <see cref="TestExecutor.RunAsync"/>, so the run emits Touchstone spans and metrics.
         /// </summary>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Task that completes when all cases have run.</returns>
         protected async Task RunAllAsync(CancellationToken cancellationToken = default)
         {
+            TestResultCollector collector = new TestResultCollector();
+            await TestExecutor.RunAsync(Suites, collector, cancellationToken).ConfigureAwait(false);
+
             List<string> failures = new List<string>();
-
-            foreach (TestSuiteDescriptor suite in Suites)
-            {
-                if (suite.BeforeSuiteAsync != null)
-                    await suite.BeforeSuiteAsync(cancellationToken);
-
-                try
-                {
-                    foreach (TestCaseDescriptor testCase in suite.Cases)
-                    {
-                        if (testCase.Skip)
-                            continue;
-
-                        try
-                        {
-                            await testCase.ExecuteAsync(cancellationToken);
-                        }
-                        catch (Exception ex)
-                        {
-                            failures.Add(testCase.TestId + ": " + ex.Message);
-                        }
-                    }
-                }
-                finally
-                {
-                    if (suite.AfterSuiteAsync != null)
-                        await suite.AfterSuiteAsync(cancellationToken);
-                }
-            }
+            foreach (TestResult result in collector.Failures)
+                failures.Add(result.TestId + ": " + result.Message);
 
             if (failures.Count > 0)
             {

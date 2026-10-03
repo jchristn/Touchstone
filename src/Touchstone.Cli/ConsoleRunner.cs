@@ -34,33 +34,35 @@ namespace Touchstone.Cli
             sink = sink ?? new ConsoleResultSink();
             sink.WriteHeader();
 
-            Stopwatch stopwatch = Stopwatch.StartNew();
-            int totalCount = 0;
-            int passedCount = 0;
-            int failedCount = 0;
-            int skippedCount = 0;
-
-            foreach (TestSuiteDescriptor suite in suites)
-            {
-                TestRunSummary summary = await TestExecutor.RunSuiteAsync(suite, sink, cancellationToken);
-                totalCount += summary.Total;
-                passedCount += summary.Passed;
-                failedCount += summary.Failed;
-                skippedCount += summary.Skipped;
-            }
-
-            stopwatch.Stop();
-            sink.WriteOverall(stopwatch.Elapsed, totalCount, passedCount, failedCount, skippedCount);
+            TestRunSummary summary = await TestExecutor.RunAsync(suites, sink, cancellationToken).ConfigureAwait(false);
+            sink.WriteOverall(summary.Duration, summary.Total, summary.Passed, summary.Failed, summary.Skipped);
 
             if (!string.IsNullOrEmpty(resultsPath))
             {
                 ExportResults(sink.AllResults, resultsPath);
             }
 
-            return failedCount == 0 ? 0 : 1;
+            return summary.Failed == 0 ? 0 : 1;
         }
 
         private static void ExportResults(IReadOnlyList<TestResult> results, string path)
+        {
+            Activity activity = CliInstrumentation.StartExport(CliInstrumentation.FormatJson, results.Count);
+            long start = Stopwatch.GetTimestamp();
+
+            try
+            {
+                WriteJson(results, path);
+                CliInstrumentation.CompleteExport(activity, CliInstrumentation.FormatJson, Stopwatch.GetElapsedTime(start), null);
+            }
+            catch (Exception ex)
+            {
+                CliInstrumentation.CompleteExport(activity, CliInstrumentation.FormatJson, Stopwatch.GetElapsedTime(start), ex);
+                throw;
+            }
+        }
+
+        private static void WriteJson(IReadOnlyList<TestResult> results, string path)
         {
             List<JsonResultEntry> entries = new List<JsonResultEntry>();
 

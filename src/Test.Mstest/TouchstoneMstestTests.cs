@@ -32,7 +32,7 @@ namespace Test.Mstest
         [DynamicData(nameof(TestCases))]
         public async Task RunTest(TestCaseDescriptor testCase)
         {
-            await testCase.ExecuteAsync(CancellationToken.None).ConfigureAwait(false);
+            await TestExecutor.ExecuteCaseAsync(testCase, CancellationToken.None).ConfigureAwait(false);
         }
     }
 }

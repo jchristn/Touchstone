@@ -4,7 +4,7 @@
 
 Runner-agnostic test descriptor framework for .NET.
 
-v0.1.12
+v0.2.0
 
 ## What is Touchstone?
 
@@ -23,6 +23,7 @@ The core idea is simple: a test is a description (name, identity, execution dele
 - **First-class skip support with reasons** -- mark descriptors as skipped and the reason propagates to every runner.
 - **Full exception capture, not just messages** -- test results preserve the complete exception, including stack traces and inner exceptions.
 - **JSON export** -- the console runner can write structured results to a file for downstream processing.
+- **Built-in observability** -- every run, suite, setup/teardown stage, and test case emits OpenTelemetry-shaped metrics and traces through the BCL `Meter` and `ActivitySource` named `Touchstone`. No exporter dependency, near-zero cost when nobody listens. See [TELEMETRY.md](TELEMETRY.md).
 
 ## Packages
 
@@ -176,7 +177,7 @@ public sealed class MyApiTheoryTests
     [MemberData(nameof(TestCases))]
     public async Task RunTest(TestCaseDescriptor testCase)
     {
-        await testCase.ExecuteAsync(CancellationToken.None);
+        await TestExecutor.ExecuteCaseAsync(testCase, CancellationToken.None);
     }
 }
 ```
@@ -235,7 +236,7 @@ public sealed class MyApiNunitTests
     [TestCaseSource(nameof(TestCases))]
     public async Task RunTest(TestCaseDescriptor testCase)
     {
-        await testCase.ExecuteAsync(CancellationToken.None);
+        await TestExecutor.ExecuteCaseAsync(testCase, CancellationToken.None);
     }
 }
 ```
@@ -289,7 +290,7 @@ public sealed class MyApiMstestTests
     [DynamicData(nameof(TestCases))]
     public async Task RunTest(TestCaseDescriptor testCase)
     {
-        await testCase.ExecuteAsync(CancellationToken.None);
+        await TestExecutor.ExecuteCaseAsync(testCase, CancellationToken.None);
     }
 }
 ```
@@ -345,6 +346,31 @@ Failed Tests:
 ```
 
 Pass `--results <path>` to write JSON results to a file. Pass `--fail` (in the sample app) to toggle an intentional failure for verifying failure rendering.
+
+## Telemetry
+
+Touchstone emits metrics and traces on a `Meter` and `ActivitySource` both named `Touchstone`. Nothing leaves the process unless your host subscribes, for example with [Radiant](https://www.nuget.org/packages/Radiant) or the OpenTelemetry SDK:
+
+```csharp
+RadiantSettings settings = new RadiantSettings("my-integration-tests");
+settings.Otlp.Endpoint = "http://127.0.0.1:4317";
+settings.Sources.AddMeter("Touchstone");
+settings.Sources.AddActivitySource("Touchstone");
+
+using (RadiantHost host = RadiantHost.Start(settings))
+{
+    return await ConsoleRunner.RunAsync(MyApiSuites.All);
+}
+```
+
+What you get:
+
+- **Traces**: `touchstone.run` > `suite:<SuiteId>` > `stage:before_suite`, `case:<Suite>.<Case>`, `sink <event>`, `stage:after_suite`, plus `export json` from the console runner. Failed spans have `Error` status and an `exception` event. The case span is current while the test body runs, so HTTP calls the test makes carry its W3C `traceparent` and the server-side trace joins the test's trace.
+- **Metrics**: run, suite, stage, case, sink, and export counters and duration histograms (seconds) by outcome; `touchstone.errors` by stage and `error.type`; `touchstone.cases.active`; last-success timestamps per suite and per run; `touchstone.build.info`.
+
+For theory-style hosts (xUnit `MemberData`, NUnit `TestCaseSource`, MSTest `DynamicData`), call `TestExecutor.ExecuteCaseAsync(testCase, ct)` so each row is instrumented. It rethrows the original exception. `TestExecutor.RunAsync(suites, sink, ct)` runs several suites under one run span, and `TestResultCollector` is a ready-made sink that keeps results in memory.
+
+[TELEMETRY.md](TELEMETRY.md) has the full metrics and spans catalog, configuration (`TouchstoneTelemetry.SuiteLabelEnabled`), recommended PromQL alerts, and suggested dashboard panels.
 
 ## Sample App
 

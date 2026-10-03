@@ -31,6 +31,7 @@ namespace Test.Shared
                     AdapterSuites.XunitFactBaseSuite(),
                     AdapterSuites.NunitBaseSuite(),
                     AdapterSuites.MstestBaseSuite(),
+                    TelemetrySuites.TelemetrySuite(),
                 };
             }
         }
