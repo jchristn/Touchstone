@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
     <Description>MSTest adapter for Touchstone. Run shared test descriptors under MSTest using DynamicData or single-test patterns.</Description>
     <PackageTags>testing;mstest;test-adapter;descriptors</PackageTags>
     <IsPackable>true</IsPackable>

@@ -1,0 +1,47 @@
+name: Verify
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      benchmark:
+        description: Run the benchmark gate on the dedicated touchstone-benchmark runner
+        type: boolean
+        default: false
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - run: dotnet build Touchstone.slnx -c Release
+      - run: dotnet run --project src/Test.Automated -c Release -f net8.0 --no-build
+      - run: dotnet run --project src/Test.Automated -c Release -f net10.0 --no-build
+      - run: dotnet test Touchstone.slnx -c Release --no-build
+      - run: dotnet run --project tests/Touchstone.SampleApp.Tests.Console -c Release --no-build
+      - run: python benchmarks/verify-gate.py
+      - run: dotnet pack Touchstone.slnx -c Release --no-build
+  benchmark:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.benchmark }}
+    runs-on: [self-hosted, touchstone-benchmark]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - run: bash benchmarks/ci-gate.sh benchmarks/baselines/macos-arm64.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-results
+          path: benchmarks/results/

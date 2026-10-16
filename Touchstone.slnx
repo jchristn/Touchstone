@@ -1,6 +1,8 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Benchmark.Workload/Benchmark.Workload.csproj" />
     <Project Path="src/Test.Automated/Test.Automated.csproj" />
+    <Project Path="src/Test.Benchmark/Test.Benchmark.csproj" />
     <Project Path="src/Test.Mstest/Test.Mstest.csproj" />
     <Project Path="src/Test.Nunit/Test.Nunit.csproj" />
     <Project Path="src/Test.Shared/Test.Shared.csproj" />

@@ -13,10 +13,12 @@ namespace Touchstone.Core
         private string _SuiteId = string.Empty;
         private string _CaseId = string.Empty;
         private string _DisplayName = string.Empty;
+        internal IScenarioDefinition? Scenario { get; private set; }
+
         private Func<CancellationToken, Task> _ExecuteAsync = _ => Task.CompletedTask;
         private IReadOnlyList<string> _Tags = Array.Empty<string>();
         private bool _Skip;
-        private string _SkipReason = null;
+        private string? _SkipReason = null;
 
         /// <summary>
         /// Initialize a new test case descriptor.
@@ -33,9 +35,9 @@ namespace Touchstone.Core
             string caseId,
             string displayName,
             Func<CancellationToken, Task> executeAsync,
-            IReadOnlyList<string> tags = null,
+            IReadOnlyList<string>? tags = null,
             bool skip = false,
-            string skipReason = null)
+            string? skipReason = null)
         {
             SuiteId = suiteId ?? throw new ArgumentNullException(nameof(suiteId));
             CaseId = caseId ?? throw new ArgumentNullException(nameof(caseId));
@@ -79,7 +81,20 @@ namespace Touchstone.Core
         public Func<CancellationToken, Task> ExecuteAsync
         {
             get { return _ExecuteAsync; }
-            set { _ExecuteAsync = value ?? throw new ArgumentNullException(nameof(ExecuteAsync)); }
+            set
+            {
+                if (Scenario != null) throw new InvalidOperationException("A built scenario execution delegate cannot be replaced.");
+                _ExecuteAsync = value ?? throw new ArgumentNullException(nameof(ExecuteAsync));
+            }
+        }
+
+        /// <summary>Feature and example metadata for a structured scenario, or null for ordinary cases.</summary>
+        public ScenarioMetadata? Metadata { get { return Scenario?.Metadata; } }
+
+        internal void AttachScenario(IScenarioDefinition? scenario)
+        {
+            Scenario = scenario;
+            _ExecuteAsync = ct => TestExecutor.ExecuteCaseAsync(this, ct);
         }
 
         /// <summary>
@@ -103,7 +118,7 @@ namespace Touchstone.Core
         /// <summary>
         /// Reason the test is skipped. Null when not skipped.
         /// </summary>
-        public string SkipReason
+        public string? SkipReason
         {
             get { return _SkipReason; }
             set { _SkipReason = value; }

@@ -11,8 +11,31 @@ namespace Touchstone.Cli
     /// <summary>
     /// Writes test results to the console in a tabular format with colored output.
     /// </summary>
-    public sealed class ConsoleResultSink : ITestResultSink
+    public sealed class ConsoleResultSink : ITestResultSink, IScenarioStepSink
     {
+        /// <summary>Show live step execution. Default false. Use one sink per run.</summary>
+        public bool ExpandSteps { get; set; }
+        private Func<string, string> _Redact = text => text;
+        /// <summary>Transform consumer text before writing it or exporting results. Default identity.
+        /// Set before execution; must not be null. This sink is not safe for concurrent runs.</summary>
+        public Func<string, string> Redact
+        {
+            get { return _Redact; }
+            set { _Redact = value ?? throw new ArgumentNullException(nameof(value)); }
+        }
+        /// <inheritdoc />
+        public ValueTask OnStepStartedAsync(string testId, ScenarioStepResult step, CancellationToken cancellationToken)
+        {
+            if (ExpandSteps) _Writer.WriteLine("  " + Redact(testId) + " " + step.Kind.ToString().ToUpperInvariant() + " " + Redact(step.DisplayName) + "...");
+            return ValueTask.CompletedTask;
+        }
+        /// <inheritdoc />
+        public ValueTask OnStepCompletedAsync(string testId, ScenarioStepResult step, CancellationToken cancellationToken)
+        {
+            if (ExpandSteps) _Writer.WriteLine("    " + step.Outcome + " " + FormatRuntime(step.Duration) + (step.Message == null ? "" : " " + Redact(step.Message)));
+            return ValueTask.CompletedTask;
+        }
+
         private readonly TextWriter _Writer;
         private readonly bool _UseColor;
         private readonly int _DescriptionWidth;
@@ -23,7 +46,7 @@ namespace Touchstone.Cli
         /// </summary>
         /// <param name="writer">Output writer. Defaults to Console.Out.</param>
         /// <param name="useColor">Whether to use ANSI color. Defaults to true when output is not redirected.</param>
-        public ConsoleResultSink(TextWriter writer = null, bool? useColor = null)
+        public ConsoleResultSink(TextWriter? writer = null, bool? useColor = null)
         {
             _Writer = writer ?? Console.Out;
             _UseColor = useColor ?? !Console.IsOutputRedirected;
@@ -70,6 +93,13 @@ namespace Touchstone.Cli
 
             _AllResults.Add(result);
             WriteResultLine(result);
+            if (ExpandSteps)
+            {
+                foreach (ScenarioStepResult step in result.Steps)
+                    if (step.Outcome == ScenarioStepOutcome.NotRun || step.Outcome == ScenarioStepOutcome.Skipped)
+                        _Writer.WriteLine("  " + Redact(step.DisplayName) + " " + step.Outcome);
+                foreach (Exception error in result.CleanupExceptions) _Writer.WriteLine("  Cleanup: " + Redact(error.Message));
+            }
             return ValueTask.CompletedTask;
         }
 
@@ -114,10 +144,10 @@ namespace Touchstone.Cli
                 {
                     if (!result.Success && !result.Skipped)
                     {
-                        _Writer.WriteLine("  " + result.DisplayName);
+                        _Writer.WriteLine("  " + Redact(result.DisplayName));
 
                         if (result.Message != null)
-                            _Writer.WriteLine("    " + result.Message);
+                            _Writer.WriteLine("    " + Redact(result.Message));
                     }
                 }
             }
@@ -125,7 +155,7 @@ namespace Touchstone.Cli
 
         private void WriteResultLine(TestResult result)
         {
-            string description = FormatDescription(result.DisplayName, _DescriptionWidth);
+            string description = FormatDescription(Redact(result.DisplayName), _DescriptionWidth);
             _Writer.Write(description);
             _Writer.Write("  ");
 

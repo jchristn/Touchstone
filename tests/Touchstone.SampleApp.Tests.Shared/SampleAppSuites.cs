@@ -29,7 +29,7 @@ namespace Touchstone.SampleApp.Tests.Shared
         /// </summary>
         public static IReadOnlyList<TestSuiteDescriptor> All
         {
-            get { return new List<TestSuiteDescriptor> { HealthSuite(), NotesSuite() }; }
+            get { return new List<TestSuiteDescriptor> { HealthSuite(), NotesSuite(), NotesScenarios.Suite() }; }
         }
 
         /// <summary>
@@ -39,7 +39,7 @@ namespace Touchstone.SampleApp.Tests.Shared
         public static TestSuiteDescriptor HealthSuite()
         {
             WebApplicationFactory<Program> factory = CreateFactory();
-            HttpClient client = factory.CreateClient();
+            HttpClient client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("http://127.0.0.1") });
 
             return new TestSuiteDescriptor(
                 suiteId: "Health",
@@ -70,7 +70,7 @@ namespace Touchstone.SampleApp.Tests.Shared
         public static TestSuiteDescriptor NotesSuite()
         {
             WebApplicationFactory<Program> factory = CreateFactory();
-            HttpClient client = factory.CreateClient();
+            HttpClient client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("http://127.0.0.1") });
 
             List<TestCaseDescriptor> cases = new List<TestCaseDescriptor>
             {

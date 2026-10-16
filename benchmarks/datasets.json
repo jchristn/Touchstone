@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "seed": 1729,
+  "cases": 10000,
+  "arms": ["floor", "delegate", "one", "many"],
+  "steps": {"floor": 0, "delegate": 0, "one": 1, "many": 5},
+  "listeners": [false, true],
+  "oracle": "All cases pass; scenario step counts equal cases multiplied by steps. No network or external fixture."
+}

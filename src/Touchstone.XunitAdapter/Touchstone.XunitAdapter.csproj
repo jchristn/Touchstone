@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
     <Description>xUnit adapters for Touchstone. Run shared test descriptors under dotnet test using theory-driven or fact-style patterns.</Description>
     <PackageTags>testing;xunit;test-adapter;descriptors</PackageTags>
     <IsPackable>true</IsPackable>

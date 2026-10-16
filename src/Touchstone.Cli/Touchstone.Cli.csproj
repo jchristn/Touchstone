@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
     <Description>Console test runner for Touchstone. Colored tabular output with pass/fail/skip rendering, JSON export, and CI-friendly exit codes.</Description>
     <PackageTags>testing;test-runner;console;cli</PackageTags>
   </PropertyGroup>

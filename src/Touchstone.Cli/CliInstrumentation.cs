@@ -26,11 +26,11 @@ namespace Touchstone.Cli
         private static readonly Counter<long> _Exports = _Meter.CreateCounter<long>(
             TouchstoneTelemetry.Exports, "{export}", "Result exports by format and outcome.");
 
-        internal static Activity StartExport(string format, int resultCount)
+        internal static Activity? StartExport(string format, int resultCount)
         {
             try
             {
-                Activity activity = _Source.StartActivity(TouchstoneTelemetry.ExportSpanPrefix + format, ActivityKind.Internal);
+                Activity? activity = _Source.StartActivity(TouchstoneTelemetry.ExportSpanPrefix + format, ActivityKind.Internal);
                 activity?.SetTag(TouchstoneTelemetry.AttributeResultCount, resultCount);
                 return activity;
             }
@@ -40,7 +40,7 @@ namespace Touchstone.Cli
             }
         }
 
-        internal static void CompleteExport(Activity activity, string format, TimeSpan elapsed, Exception exception)
+        internal static void CompleteExport(Activity? activity, string format, TimeSpan elapsed, Exception? exception)
         {
             try
             {

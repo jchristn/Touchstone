@@ -65,11 +65,11 @@ namespace Touchstone.Core
             get { return _Version; }
         }
 
-        internal static Activity StartRun(int suiteCount)
+        internal static Activity? StartRun(int suiteCount)
         {
             try
             {
-                Activity activity = _Source.StartActivity(TouchstoneTelemetry.RunSpanName, ActivityKind.Internal);
+                Activity? activity = _Source.StartActivity(TouchstoneTelemetry.RunSpanName, ActivityKind.Internal);
                 activity?.SetTag(TouchstoneTelemetry.AttributeSuiteCount, suiteCount);
                 return activity;
             }
@@ -79,7 +79,7 @@ namespace Touchstone.Core
             }
         }
 
-        internal static void CompleteRun(Activity activity, TestRunSummary summary, TimeSpan elapsed, Exception exception)
+        internal static void CompleteRun(Activity? activity, TestRunSummary summary, TimeSpan elapsed, Exception? exception)
         {
             try
             {
@@ -101,11 +101,11 @@ namespace Touchstone.Core
             FinishSpan(activity, SummaryOutcome(summary, exception), exception, summary);
         }
 
-        internal static Activity StartSuite(TestSuiteDescriptor suite)
+        internal static Activity? StartSuite(TestSuiteDescriptor suite)
         {
             try
             {
-                Activity activity = _Source.StartActivity(TouchstoneTelemetry.SuiteSpanPrefix + suite.SuiteId, ActivityKind.Internal);
+                Activity? activity = _Source.StartActivity(TouchstoneTelemetry.SuiteSpanPrefix + suite.SuiteId, ActivityKind.Internal);
                 if (activity != null)
                 {
                     activity.SetTag(TouchstoneTelemetry.AttributeSuiteId, suite.SuiteId);
@@ -121,7 +121,7 @@ namespace Touchstone.Core
             }
         }
 
-        internal static void CompleteSuite(Activity activity, string suiteId, TestRunSummary summary, TimeSpan elapsed, Exception exception)
+        internal static void CompleteSuite(Activity? activity, string suiteId, TestRunSummary summary, TimeSpan elapsed, Exception? exception)
         {
             try
             {
@@ -141,11 +141,11 @@ namespace Touchstone.Core
             FinishSpan(activity, SummaryOutcome(summary, exception), exception, summary);
         }
 
-        internal static Activity StartStage(string suiteId, string stage)
+        internal static Activity? StartStage(string suiteId, string stage)
         {
             try
             {
-                Activity activity = _Source.StartActivity(TouchstoneTelemetry.StageSpanPrefix + stage, ActivityKind.Internal);
+                Activity? activity = _Source.StartActivity(TouchstoneTelemetry.StageSpanPrefix + stage, ActivityKind.Internal);
                 activity?.SetTag(TouchstoneTelemetry.AttributeSuiteId, suiteId);
                 return activity;
             }
@@ -155,7 +155,7 @@ namespace Touchstone.Core
             }
         }
 
-        internal static void CompleteStage(Activity activity, string suiteId, string stage, TimeSpan elapsed, Exception exception)
+        internal static void CompleteStage(Activity? activity, string suiteId, string stage, TimeSpan elapsed, Exception? exception)
         {
             try
             {
@@ -176,11 +176,11 @@ namespace Touchstone.Core
             FinishSpan(activity, exception == null ? TouchstoneTelemetry.OutcomeOk : TouchstoneTelemetry.OutcomeFailed, exception, null);
         }
 
-        internal static Activity StartCase(TestCaseDescriptor testCase)
+        internal static Activity? StartCase(TestCaseDescriptor testCase)
         {
             try
             {
-                Activity activity = _Source.StartActivity(TouchstoneTelemetry.CaseSpanPrefix + testCase.TestId, ActivityKind.Internal);
+                Activity? activity = _Source.StartActivity(TouchstoneTelemetry.CaseSpanPrefix + testCase.TestId, ActivityKind.Internal);
                 if (activity != null)
                 {
                     activity.SetTag(TouchstoneTelemetry.AttributeSuiteId, testCase.SuiteId);
@@ -219,7 +219,7 @@ namespace Touchstone.Core
             }
         }
 
-        internal static void CompleteCase(Activity activity, string suiteId, string outcome, TimeSpan elapsed, Exception exception, bool wasStarted)
+        internal static void CompleteCase(Activity? activity, string suiteId, string outcome, TimeSpan elapsed, Exception? exception, bool wasStarted)
         {
             try
             {
@@ -241,11 +241,11 @@ namespace Touchstone.Core
             FinishSpan(activity, outcome, exception, null);
         }
 
-        internal static Activity StartSink(string suiteId, string sinkEvent)
+        internal static Activity? StartSink(string suiteId, string sinkEvent)
         {
             try
             {
-                Activity activity = _Source.StartActivity(TouchstoneTelemetry.SinkSpanPrefix + sinkEvent, ActivityKind.Internal);
+                Activity? activity = _Source.StartActivity(TouchstoneTelemetry.SinkSpanPrefix + sinkEvent, ActivityKind.Internal);
                 activity?.SetTag(TouchstoneTelemetry.AttributeSuiteId, suiteId);
                 return activity;
             }
@@ -255,7 +255,7 @@ namespace Touchstone.Core
             }
         }
 
-        internal static void CompleteSink(Activity activity, string suiteId, string sinkEvent, TimeSpan elapsed, Exception exception)
+        internal static void CompleteSink(Activity? activity, string suiteId, string sinkEvent, TimeSpan elapsed, Exception? exception)
         {
             try
             {
@@ -278,14 +278,15 @@ namespace Touchstone.Core
             FinishSpan(activity, exception == null ? TouchstoneTelemetry.OutcomeOk : TouchstoneTelemetry.OutcomeFailed, exception, null);
         }
 
-        internal static string ErrorType(Exception exception)
+        internal static string? ErrorType(Exception? exception)
         {
             if (exception == null) return null;
             return exception.GetType().FullName ?? "_OTHER";
         }
 
-        internal static void AddExceptionEvent(Activity activity, Exception exception)
+        internal static void AddExceptionEvent(Activity? activity, Exception? exception)
         {
+            if (activity == null || exception == null) return;
             ActivityTagsCollection tags = new ActivityTagsCollection
             {
                 { "exception.type", ErrorType(exception) },
@@ -295,13 +296,13 @@ namespace Touchstone.Core
             activity.AddEvent(new ActivityEvent("exception", DateTimeOffset.UtcNow, tags));
         }
 
-        internal static string Truncate(string value)
+        internal static string? Truncate(string? value)
         {
             if (value == null || value.Length <= MaxExceptionMessageLength) return value;
             return value.Substring(0, MaxExceptionMessageLength);
         }
 
-        private static void FinishSpan(Activity activity, string outcome, Exception exception, TestRunSummary summary)
+        private static void FinishSpan(Activity? activity, string outcome, Exception? exception, TestRunSummary? summary)
         {
             if (activity == null) return;
 
@@ -348,7 +349,7 @@ namespace Touchstone.Core
             }
         }
 
-        private static void RecordError(string stage, string suiteId, Exception exception)
+        private static void RecordError(string stage, string? suiteId, Exception? exception)
         {
             TagList tags = suiteId == null ? new TagList() : SuiteTags(suiteId);
             tags.Add(TouchstoneTelemetry.LabelStage, stage);
@@ -356,7 +357,7 @@ namespace Touchstone.Core
             _Errors.Add(1, tags);
         }
 
-        private static string SummaryOutcome(TestRunSummary summary, Exception exception)
+        private static string SummaryOutcome(TestRunSummary summary, Exception? exception)
         {
             if (exception is OperationCanceledException) return TouchstoneTelemetry.OutcomeCanceled;
             if (exception != null) return TouchstoneTelemetry.OutcomeError;
@@ -389,7 +390,7 @@ namespace Touchstone.Core
                 if (entry.Key.Length == 0)
                     measurements.Add(new Measurement<double>(entry.Value));
                 else
-                    measurements.Add(new Measurement<double>(entry.Value, new KeyValuePair<string, object>(TouchstoneTelemetry.LabelSuite, entry.Key)));
+                    measurements.Add(new Measurement<double>(entry.Value, new KeyValuePair<string, object?>(TouchstoneTelemetry.LabelSuite, entry.Key)));
             }
 
             return measurements;
@@ -404,7 +405,7 @@ namespace Touchstone.Core
 
         private static Measurement<long> ObserveBuildInfo()
         {
-            return new Measurement<long>(1, new KeyValuePair<string, object>(TouchstoneTelemetry.LabelVersion, _Version));
+            return new Measurement<long>(1, new KeyValuePair<string, object?>(TouchstoneTelemetry.LabelVersion, _Version));
         }
 
         private static string ResolveVersion()
@@ -412,7 +413,7 @@ namespace Touchstone.Core
             try
             {
                 Assembly assembly = typeof(TouchstoneInstrumentation).Assembly;
-                AssemblyInformationalVersionAttribute info = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
+                AssemblyInformationalVersionAttribute? info = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
                 string version = info?.InformationalVersion ?? assembly.GetName().Version?.ToString() ?? "unknown";
                 int plus = version.IndexOf('+');
                 return plus > 0 ? version.Substring(0, plus) : version;

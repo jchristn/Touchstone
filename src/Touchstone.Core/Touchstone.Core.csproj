@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
     <Description>Runner-agnostic test descriptor model for .NET. Define test cases and suites once, execute them through any runner.</Description>
     <PackageTags>testing;test-framework;test-runner;descriptors</PackageTags>
   </PropertyGroup>

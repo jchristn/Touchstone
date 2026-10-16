@@ -33,6 +33,7 @@ namespace Test.Shared
                     AdapterSuites.MstestBaseSuite(),
                     AdapterSuites.FrameworkVersionSuite(),
                     TelemetrySuites.TelemetrySuite(),
+                    ScenarioSuites.All(),
                 };
             }
         }

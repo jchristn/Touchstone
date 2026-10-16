@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.3.0-alpha] - 2026-10-16
+
+### Added
+
+- Optional code-first BDD scenarios in Core: typed per-execution context, reusable Given/When/Then/And steps, immutable definitions, feature/requirement metadata, and typed example expansion.
+- Structured single-case execution results, step timing and outcomes, matching caller cancellation, guaranteed context disposal, and separate cleanup diagnostics that preserve primary exceptions.
+- Optional live step observers, expanded console output, additive typed JSON fields, redaction callbacks, and self-contained accessible HTML execution reports.
+- Host-neutral scenario diagnostics for native xUnit, NUnit, and MSTest output. Shared test and sample hosts exercise the same scenario definitions.
+- Scenario context/step/cleanup metrics and nested spans on the existing Touchstone sources, plus shared lifecycle, reporting, telemetry, and adapter coverage.
+- Reproducible CLI overhead workload, independent benchmark harness, paired comparison gate, committed baselines, and CI checks.
+- BDD authoring and execution documentation; sample Notes persistence, missing-note, and validation scenarios.
+
+### Changed
+
+- Library projects enable nullable reference analysis and explicit usings without suppressing diagnostics.
+- NuGet packages include the MIT license file and BDD/telemetry documentation alongside README, icon, and portable symbol packages.
+- Sample HTTP clients use `127.0.0.1` loopback base addresses.
+
+### Compatibility
+
+- Existing descriptor constructors, executor overloads, compact console output, JSON root array, and case counts remain compatible. Built scenario delegates cannot be replaced; ordinary descriptor delegates remain mutable.
+- Scenario cancellation returns a failed logical case with `Canceled = true`; throwing entry points preserve `OperationCanceledException`. Native runner outcome labels may differ.
+
+
 ## [v0.2.1] - 2026-10-03
 
 ### Changed

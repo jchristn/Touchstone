@@ -1,12 +1,22 @@
 namespace Touchstone.Core
 {
     using System;
+    using System.Collections.Generic;
 
     /// <summary>
     /// Outcome of a single test case execution.
     /// </summary>
     public sealed class TestResult
     {
+        /// <summary>Ordered scenario step results; empty for ordinary cases.</summary>
+        public IReadOnlyList<ScenarioStepResult> Steps { get; internal set; } = Array.Empty<ScenarioStepResult>();
+        /// <summary>Scenario metadata, or null for ordinary cases.</summary>
+        public ScenarioMetadata? Metadata { get; internal set; }
+        /// <summary>True only when a scenario observes matching caller cancellation.</summary>
+        public bool Canceled { get; internal set; }
+        /// <summary>Secondary cleanup failures, preserving any primary failure.</summary>
+        public IReadOnlyList<Exception> CleanupExceptions { get; internal set; } = Array.Empty<Exception>();
+
         private string _TestId = string.Empty;
         private string _SuiteId = string.Empty;
         private string _CaseId = string.Empty;
@@ -14,8 +24,8 @@ namespace Touchstone.Core
         private bool _Success;
         private bool _Skipped;
         private TimeSpan _Duration;
-        private Exception _Exception = null;
-        private string _Message = null;
+        private Exception? _Exception = null;
+        private string? _Message = null;
 
         /// <summary>
         /// Initialize a new test result.
@@ -90,7 +100,7 @@ namespace Touchstone.Core
         /// <summary>
         /// Exception captured during a failed test. Null on success.
         /// </summary>
-        public Exception Exception
+        public Exception? Exception
         {
             get { return _Exception; }
             set { _Exception = value; }
@@ -99,7 +109,7 @@ namespace Touchstone.Core
         /// <summary>
         /// Human-readable failure or skip message. Null on success.
         /// </summary>
-        public string Message
+        public string? Message
         {
             get { return _Message; }
             set { _Message = value; }

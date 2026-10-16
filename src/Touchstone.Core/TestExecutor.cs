@@ -26,12 +26,12 @@ namespace Touchstone.Core
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="suites"/> or any suite in it is null.</exception>
         public static async Task<TestRunSummary> RunAsync(
             IReadOnlyList<TestSuiteDescriptor> suites,
-            ITestResultSink sink = null,
+            ITestResultSink? sink = null,
             CancellationToken cancellationToken = default)
         {
             if (suites == null) throw new ArgumentNullException(nameof(suites));
 
-            Activity activity = TouchstoneInstrumentation.StartRun(suites.Count);
+            Activity? activity = TouchstoneInstrumentation.StartRun(suites.Count);
             Stopwatch stopwatch = Stopwatch.StartNew();
             TestRunSummary total = new TestRunSummary();
 
@@ -70,14 +70,14 @@ namespace Touchstone.Core
         /// <exception cref="ArgumentNullException">Thrown when <paramref name="suite"/> is null.</exception>
         public static async Task<TestRunSummary> RunSuiteAsync(
             TestSuiteDescriptor suite,
-            ITestResultSink sink = null,
+            ITestResultSink? sink = null,
             CancellationToken cancellationToken = default)
         {
             if (suite == null) throw new ArgumentNullException(nameof(suite));
 
-            Activity activity = TouchstoneInstrumentation.StartSuite(suite);
+            Activity? activity = TouchstoneInstrumentation.StartSuite(suite);
             Stopwatch spanStopwatch = Stopwatch.StartNew();
-            Stopwatch totalStopwatch = null;
+            Stopwatch? totalStopwatch = null;
             int passed = 0;
             int failed = 0;
             int skipped = 0;
@@ -102,7 +102,7 @@ namespace Touchstone.Core
                 {
                     foreach (TestCaseDescriptor testCase in suite.Cases)
                     {
-                        TestResult result = await RunCaseAsync(testCase, cancellationToken).ConfigureAwait(false);
+                        TestResult result = await RunCaseAsync(testCase, cancellationToken, sink as IScenarioStepSink).ConfigureAwait(false);
 
                         if (result.Skipped)
                             skipped++;
@@ -186,11 +186,41 @@ namespace Touchstone.Core
                 ExceptionDispatchInfo.Capture(result.Exception).Throw();
         }
 
+        /// <summary>Execute a case and return structured results without rethrowing assertion failures.
+        /// Observer errors propagate; suite hooks do not run.</summary>
+        /// <exception cref="ArgumentNullException">The case is null.</exception>
+        public static Task<TestResult> ExecuteCaseResultAsync(TestCaseDescriptor testCase,
+            CancellationToken cancellationToken = default, IScenarioStepSink? stepSink = null)
+        {
+            if (testCase == null) throw new ArgumentNullException(nameof(testCase));
+            return RunCaseAsync(testCase, cancellationToken, stepSink);
+        }
+
         private static async Task<TestResult> RunCaseAsync(
             TestCaseDescriptor testCase,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            IScenarioStepSink? stepSink = null)
         {
-            Activity activity = TouchstoneInstrumentation.StartCase(testCase);
+            Activity? activity = TouchstoneInstrumentation.StartCase(testCase);
+            if (testCase.Scenario != null)
+            {
+                bool active = !testCase.Skip;
+                if (active) TouchstoneInstrumentation.CaseStarted(testCase.SuiteId);
+                Stopwatch scenarioTimer = Stopwatch.StartNew();
+                try
+                {
+                    TestResult scenarioResult = await testCase.Scenario.ExecuteAsync(testCase, stepSink, cancellationToken).ConfigureAwait(false);
+                    TouchstoneInstrumentation.CompleteCase(activity, testCase.SuiteId,
+                        scenarioResult.Skipped ? TouchstoneTelemetry.OutcomeSkipped : scenarioResult.Success ? TouchstoneTelemetry.OutcomePassed : TouchstoneTelemetry.OutcomeFailed,
+                        scenarioResult.Duration, scenarioResult.Exception, active);
+                    return scenarioResult;
+                }
+                catch (Exception ex)
+                {
+                    TouchstoneInstrumentation.CompleteCase(activity, testCase.SuiteId, TouchstoneTelemetry.OutcomeFailed, scenarioTimer.Elapsed, ex, active);
+                    throw;
+                }
+            }
 
             if (testCase.Skip)
             {
@@ -257,7 +287,7 @@ namespace Touchstone.Core
             Func<CancellationToken, ValueTask> hook,
             CancellationToken cancellationToken)
         {
-            Activity activity = TouchstoneInstrumentation.StartStage(suiteId, stage);
+            Activity? activity = TouchstoneInstrumentation.StartStage(suiteId, stage);
             long start = Stopwatch.GetTimestamp();
 
             try
@@ -274,7 +304,7 @@ namespace Touchstone.Core
 
         private static async Task InvokeSinkAsync(string suiteId, string sinkEvent, Func<ValueTask> callback)
         {
-            Activity activity = TouchstoneInstrumentation.StartSink(suiteId, sinkEvent);
+            Activity? activity = TouchstoneInstrumentation.StartSink(suiteId, sinkEvent);
             long start = Stopwatch.GetTimestamp();
 
             try

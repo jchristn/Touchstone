@@ -10,11 +10,11 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <Version>0.2.1</Version>
+    <Version>0.3.0-alpha</Version>
     <Authors>jchristn</Authors>
     <Company>Joel Christner</Company>
     <Copyright>(c)2026 Joel Christner</Copyright>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <PackageProjectUrl>https://github.com/jchristn/touchstone</PackageProjectUrl>
     <RepositoryUrl>https://github.com/jchristn/touchstone</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
@@ -23,5 +23,11 @@
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)LICENSE.md" Pack="true" PackagePath="\" />
+    <None Include="$(MSBuildThisFileDirectory)BDD.md" Pack="true" PackagePath="\" />
+    <None Include="$(MSBuildThisFileDirectory)TELEMETRY.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
 </Project>

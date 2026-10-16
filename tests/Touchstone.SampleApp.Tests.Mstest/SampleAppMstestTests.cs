@@ -16,6 +16,9 @@ namespace Touchstone.SampleApp.Tests.Mstest
     [TestClass]
     public sealed class SampleAppMstestTests
     {
+        /// <summary>Native per-test output context.</summary>
+        public TestContext TestContext { get; set; } = null!;
+
         /// <summary>
         /// Provides non-skipped test case descriptors as DynamicData rows.
         /// </summary>
@@ -29,7 +32,7 @@ namespace Touchstone.SampleApp.Tests.Mstest
         [DynamicData(nameof(TestCases))]
         public async Task RunTest(TestCaseDescriptor testCase)
         {
-            await TestExecutor.ExecuteCaseAsync(testCase, CancellationToken.None);
+            await ScenarioDiagnostics.ExecuteAsync(testCase, text => TestContext.WriteLine(text), CancellationToken.None);
         }
     }
 }

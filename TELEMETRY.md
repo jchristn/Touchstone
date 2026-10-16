@@ -201,3 +201,18 @@ From a failing panel, open Tempo and search `{ resource.service.name = "<host>" 
 - With no listener, every code path behaves exactly as before. This is covered by `NoListener`.
 - No secrets, payloads, or test inputs are recorded. Spans carry descriptor identifiers and names, tags, skip reasons, and exception type, message, and stack trace from failed tests. If your exception messages can contain sensitive data, filter the `exception` event in your collector.
 - Metric labels are bounded: fixed enumerations plus `suite` (controllable with `SuiteLabelEnabled`) and `error.type`.
+
+## Scenario execution
+
+Code-first BDD scenarios use the existing `Touchstone` meter and activity-source names. A case contains `scenario:context`, one `scenario:step` activity per executed step, and `scenario:cleanup` when a context was created. Ordinary cases remain unchanged. Step activities carry `touchstone.step.kind` (Given, When, Then) and `touchstone.outcome`. Outbound instrumentation running inside a step inherits that step as its parent. Step identities, display names, example values, and exception messages are not added to scenario spans. Failures carry an exception event with only `exception.type`; outer case spans retain their existing full exception contract.
+
+| Instrument | Kind | Unit | Labels |
+|---|---|---|---|
+| `touchstone.scenario.operations` | Counter | operations | `operation` (context, step, cleanup), `outcome` (Passed, Failed, Canceled), `kind` (Given, When, Then, none) |
+| `touchstone.scenario.operation.duration` | Histogram | seconds | Same bounded labels |
+
+Skipped and NotRun steps have no execution measurement or activity. Cancellation has its own step/context outcome while existing case metrics count the unsuccessful case as failed. Cleanup records its own outcome so secondary failures can be identified without replacing a primary exception. Reports still show canceled and unexecuted work when no listener is present.
+
+HTML export uses the existing `export html` activity and export metrics with `format=html`, just as JSON uses `format=json`. Subscribe to the existing `Touchstone` sources to receive both. No exporter, collector, or backend is embedded in Core. Instrumentation is best-effort and listener failures cannot change scenario outcomes.
+
+Scenario-level instrumentation deliberately omits consumer text. Existing outer case spans still follow the established exception-event contract, which includes exception messages and stack traces. Configure filtering/redaction in the host's telemetry processor before exporting sensitive exceptions; console/JSON/HTML redaction callbacks do not rewrite telemetry or in-memory exceptions. For an individual scenario trace, look beneath its case span to distinguish context creation, slow steps, and cleanup. Aggregate dashboards can graph operation counts by outcome and histogram percentiles without using unbounded IDs or display names as metric labels.

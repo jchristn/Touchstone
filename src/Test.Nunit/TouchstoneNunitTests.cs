@@ -23,7 +23,7 @@ namespace Test.Nunit
         [TestCaseSource(nameof(TestCases))]
         public async Task RunTest(TestCaseDescriptor testCase)
         {
-            await TestExecutor.ExecuteCaseAsync(testCase, CancellationToken.None).ConfigureAwait(false);
+            await ScenarioDiagnostics.ExecuteAsync(testCase, text => TestContext.Progress.WriteLine(text), CancellationToken.None).ConfigureAwait(false);
         }
 
         private static IEnumerable TestCases()

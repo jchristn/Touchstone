@@ -10,6 +10,11 @@ namespace Touchstone.Core
     /// </summary>
     public static class TouchstoneTelemetry
     {
+        /// <summary>Scenario context, step, and cleanup execution counter.</summary>
+        public const string ScenarioOperations = "touchstone.scenario.operations";
+        /// <summary>Scenario operation duration histogram, in seconds.</summary>
+        public const string ScenarioOperationDuration = "touchstone.scenario.operation.duration";
+
         private static volatile bool _SuiteLabelEnabled = true;
 
         /// <summary>

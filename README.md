@@ -4,7 +4,7 @@
 
 Runner-agnostic test descriptor framework for .NET.
 
-v0.2.1
+v0.3.0-alpha
 
 ## What is Touchstone?
 
@@ -25,6 +25,26 @@ The core idea is simple: a test is a description (name, identity, execution dele
 - **JSON export** -- the console runner can write structured results to a file for downstream processing.
 - **Built-in observability** -- every run, suite, setup/teardown stage, and test case emits OpenTelemetry-shaped metrics and traces through the BCL `Meter` and `ActivitySource` named `Touchstone`. No exporter dependency, near-zero cost when nobody listens. See [TELEMETRY.md](TELEMETRY.md).
 
+## Behavior Driven Development
+
+Define optional typed scenarios in `Touchstone.Core` with Given, When, Then, and And steps. Each scenario remains one standard test descriptor, so the same behavior runs through console, xUnit, NUnit, and MSTest. Each execution owns a fresh context and records ordered step outcomes, durations, cancellation, and cleanup diagnostics.
+
+```csharp
+TestCaseDescriptor scenario = new ScenarioBuilder<int>(
+    "Health", "Ready", "The application is ready", ct => Task.FromResult(200))
+    .Given("response", "the health response is available", (status, ct) => Task.CompletedTask)
+    .Then("ok", "the response is successful", (status, ct) =>
+    {
+        if (status != 200) throw new InvalidOperationException("Expected status 200.");
+        return Task.CompletedTask;
+    })
+    .Build();
+```
+
+The sample console supports `--steps`, `--results <path>`, and `--html <path>`. Compact output remains the default. JSON adds steps without changing the existing root array or legacy fields. HTML reports open offline without remote assets. Use `ScenarioDiagnostics.ExecuteAsync` with your framework's output callback to capture step diagnostics and rethrow original failures.
+
+[BDD.md](BDD.md) covers authoring, typed examples, execution semantics, host output, redaction, and migration. [BENCHMARKING.md](BENCHMARKING.md) explains the reproducible overhead harness and comparison gate.
+
 ## Packages
 
 | Package | Description |
@@ -43,26 +63,26 @@ The core idea is simple: a test is a description (name, identity, execution dele
 The simplest approach is to install the metapackage, which includes everything:
 
 ```bash
-dotnet add package Touchstone
+dotnet add package Touchstone --version 0.3.0-alpha
 ```
 
 Or install only the packages you need:
 
 ```bash
 # Shared test descriptor library (no runner dependency)
-dotnet add package Touchstone.Core
+dotnet add package Touchstone.Core --version 0.3.0-alpha
 
 # Console runner project
-dotnet add package Touchstone.Cli
+dotnet add package Touchstone.Cli --version 0.3.0-alpha
 
 # xUnit test project
-dotnet add package Touchstone.XunitAdapter
+dotnet add package Touchstone.XunitAdapter --version 0.3.0-alpha
 
 # NUnit test project
-dotnet add package Touchstone.NunitAdapter
+dotnet add package Touchstone.NunitAdapter --version 0.3.0-alpha
 
 # MSTest test project
-dotnet add package Touchstone.MstestAdapter
+dotnet add package Touchstone.MstestAdapter --version 0.3.0-alpha
 ```
 
 ### 2. Define Test Descriptors

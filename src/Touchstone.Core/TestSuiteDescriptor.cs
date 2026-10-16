@@ -13,8 +13,8 @@ namespace Touchstone.Core
         private string _SuiteId = string.Empty;
         private string _DisplayName = string.Empty;
         private IReadOnlyList<TestCaseDescriptor> _Cases = Array.Empty<TestCaseDescriptor>();
-        private Func<CancellationToken, ValueTask> _BeforeSuiteAsync = null;
-        private Func<CancellationToken, ValueTask> _AfterSuiteAsync = null;
+        private Func<CancellationToken, ValueTask>? _BeforeSuiteAsync = null;
+        private Func<CancellationToken, ValueTask>? _AfterSuiteAsync = null;
 
         /// <summary>
         /// Initialize a new test suite descriptor.
@@ -28,8 +28,8 @@ namespace Touchstone.Core
             string suiteId,
             string displayName,
             IReadOnlyList<TestCaseDescriptor> cases,
-            Func<CancellationToken, ValueTask> beforeSuiteAsync = null,
-            Func<CancellationToken, ValueTask> afterSuiteAsync = null)
+            Func<CancellationToken, ValueTask>? beforeSuiteAsync = null,
+            Func<CancellationToken, ValueTask>? afterSuiteAsync = null)
         {
             SuiteId = suiteId ?? throw new ArgumentNullException(nameof(suiteId));
             DisplayName = displayName ?? throw new ArgumentNullException(nameof(displayName));
@@ -68,7 +68,7 @@ namespace Touchstone.Core
         /// <summary>
         /// Optional setup hook run before any test in the suite. Null when unused.
         /// </summary>
-        public Func<CancellationToken, ValueTask> BeforeSuiteAsync
+        public Func<CancellationToken, ValueTask>? BeforeSuiteAsync
         {
             get { return _BeforeSuiteAsync; }
             set { _BeforeSuiteAsync = value; }
@@ -77,7 +77,7 @@ namespace Touchstone.Core
         /// <summary>
         /// Optional teardown hook run after all tests in the suite. Null when unused.
         /// </summary>
-        public Func<CancellationToken, ValueTask> AfterSuiteAsync
+        public Func<CancellationToken, ValueTask>? AfterSuiteAsync
         {
             get { return _AfterSuiteAsync; }
             set { _AfterSuiteAsync = value; }

@@ -32,7 +32,7 @@ namespace Touchstone.NunitAdapter
 
             List<string> failures = new List<string>();
             foreach (TestResult result in collector.Failures)
-                failures.Add(result.TestId + ": " + result.Message);
+                failures.Add(result.TestId + ": " + result.Message + Environment.NewLine + ScenarioDiagnostics.Format(result));
 
             if (failures.Count > 0)
             {
