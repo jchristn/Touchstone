@@ -8,13 +8,14 @@ v0.3.0-alpha
 
 ## What is Touchstone?
 
-Touchstone is a .NET framework that lets you write **test descriptors** once and run them through any host. Define your integration tests as plain descriptor objects in a shared library, then execute them via xUnit for CI pipelines or via the built-in console runner for fast local development -- without changing a single line of test logic.
+Touchstone is a .NET framework that lets you write **test descriptors** once and run them through any host. Define your unit and integration tests as plain descriptor objects in a shared library, then execute them via xUnit for CI pipelines or via the built-in console runner for fast local development -- without changing a single line of test logic.
 
-The core idea is simple: a test is a description (name, identity, execution delegate, optional setup/teardown) rather than an annotated method bound to a specific framework. Touchstone provides the descriptor model, the execution engine, and adapters that plug into the hosts you already use.
+A test descriptor carries its identity, name, and execution logic independently of runner attributes. Write a short check as an async delegate, or build a behavior driven development (BDD) scenario from typed Given/When/Then steps. Both produce the same `TestCaseDescriptor` and run through the same engine and adapters.
 
 ## Why Touchstone?
 
 - **Write once, run anywhere** -- the same test descriptors work in xUnit, NUnit, MSTest, the console runner, or any custom runner you build.
+- **Readable behavior scenarios** -- compose Given/When/Then/And steps with a fresh context per execution, original exception capture, and step-level results in every host.
 - **Clean separation between test definitions and test execution** -- descriptors live in a shared project with no runner dependencies.
 - **Readable local output without needing `dotnet test`** -- the console runner produces colored, tabular results directly in your terminal.
 - **No lock-in to a specific test framework** -- switch runners without rewriting tests.
@@ -22,36 +23,16 @@ The core idea is simple: a test is a description (name, identity, execution dele
 - **Optional suite lifecycle hooks (setup/teardown) without making them mandatory** -- add them when you need them, skip them when you don't.
 - **First-class skip support with reasons** -- mark descriptors as skipped and the reason propagates to every runner.
 - **Full exception capture, not just messages** -- test results preserve the complete exception, including stack traces and inner exceptions.
-- **JSON export** -- the console runner can write structured results to a file for downstream processing.
+- **Execution reports** -- use compact or expanded console output, export structured JSON, or generate a self-contained offline HTML report with scenario steps and failure details.
 - **Built-in observability** -- every run, suite, setup/teardown stage, and test case emits OpenTelemetry-shaped metrics and traces through the BCL `Meter` and `ActivitySource` named `Touchstone`. No exporter dependency, near-zero cost when nobody listens. See [TELEMETRY.md](TELEMETRY.md).
-
-## Behavior Driven Development
-
-Define optional typed scenarios in `Touchstone.Core` with Given, When, Then, and And steps. Each scenario remains one standard test descriptor, so the same behavior runs through console, xUnit, NUnit, and MSTest. Each execution owns a fresh context and records ordered step outcomes, durations, cancellation, and cleanup diagnostics.
-
-```csharp
-TestCaseDescriptor scenario = new ScenarioBuilder<int>(
-    "Health", "Ready", "The application is ready", ct => Task.FromResult(200))
-    .Given("response", "the health response is available", (status, ct) => Task.CompletedTask)
-    .Then("ok", "the response is successful", (status, ct) =>
-    {
-        if (status != 200) throw new InvalidOperationException("Expected status 200.");
-        return Task.CompletedTask;
-    })
-    .Build();
-```
-
-The sample console supports `--steps`, `--results <path>`, and `--html <path>`. Compact output remains the default. JSON adds steps without changing the existing root array or legacy fields. HTML reports open offline without remote assets. Use `ScenarioDiagnostics.ExecuteAsync` with your framework's output callback to capture step diagnostics and rethrow original failures.
-
-[BDD.md](BDD.md) covers authoring, typed examples, execution semantics, host output, redaction, and migration. [BENCHMARKING.md](BENCHMARKING.md) explains the reproducible overhead harness and comparison gate.
 
 ## Packages
 
 | Package | Description |
 |---|---|
 | **Touchstone** | Metapackage that includes Core, Cli, and all framework adapters. Install this to get everything. |
-| **Touchstone.Core** | Runner-agnostic descriptor model, execution engine, and result types. No third-party dependencies. |
-| **Touchstone.Cli** | Console test runner with colored tabular output, JSON export, and exit code contract. |
+| **Touchstone.Core** | Runner-agnostic descriptors, typed BDD scenarios, execution engine, and case/step results. No third-party dependencies. |
+| **Touchstone.Cli** | Console runner with compact or live step output, JSON export, offline HTML reports, and exit code contract. |
 | **Touchstone.XunitAdapter** | xUnit adapters (theory-driven and fact-style) for running shared descriptors under `dotnet test`. |
 | **Touchstone.NunitAdapter** | NUnit adapter (TestCaseSource-driven and single-test) for running shared descriptors under NUnit. Requires NUnit 5.0 or later. |
 | **Touchstone.MstestAdapter** | MSTest adapter (DynamicData-driven and single-test) for running shared descriptors under MSTest. Requires MSTest.TestFramework 4.4 or later. |
@@ -85,75 +66,144 @@ dotnet add package Touchstone.NunitAdapter --version 0.3.0-alpha
 dotnet add package Touchstone.MstestAdapter --version 0.3.0-alpha
 ```
 
-### 2. Define Test Descriptors
+### 2. Define Tests in a Shared Library
 
-Create a shared class library that references only `Touchstone.Core`. Define your test suites and cases as descriptors:
+Create a shared class library that references `Touchstone.Core` and the application you are testing. The walkthrough uses a shopping cart to show a short delegate check and a BDD scenario in the same suite. Neither test depends on a runner, and the example needs no server or external service.
+
+For a runnable example, put this small application class in `ShoppingCart.cs`. In an existing project, reference your own cart implementation instead.
 
 ```csharp
-using System.Collections.Generic;
-using System.Net;
-using System.Net.Http;
-using System.Threading.Tasks;
-using Touchstone.Core;
-
-public static class MyApiSuites
+namespace MyTests
 {
-    public static IReadOnlyList<TestSuiteDescriptor> All
+    using System;
+
+    /// <summary>A cart that tracks item count and total price.</summary>
+    public sealed class ShoppingCart
     {
-        get { return new List<TestSuiteDescriptor> { HealthSuite() }; }
-    }
+        /// <summary>Total price of the items added.</summary>
+        public decimal Total { get; private set; }
 
-    public static TestSuiteDescriptor HealthSuite()
-    {
-        HttpClient client = CreateTestClient();
+        /// <summary>Number of items added.</summary>
+        public int ItemCount { get; private set; }
 
-        return new TestSuiteDescriptor(
-            suiteId: "Health",
-            displayName: "Health Checks",
-            afterSuiteAsync: ct =>
-            {
-                client.Dispose();
-                return ValueTask.CompletedTask;
-            },
-            cases: new List<TestCaseDescriptor>
-            {
-                new TestCaseDescriptor(
-                    suiteId: "Health",
-                    caseId: "ReturnsOk",
-                    displayName: "GET /health returns 200",
-                    executeAsync: async ct =>
-                    {
-                        HttpResponseMessage response = await client.GetAsync("/health", ct);
-                        if (response.StatusCode != HttpStatusCode.OK)
-                            throw new System.Exception("Expected 200 OK");
-                    }),
-
-                new TestCaseDescriptor(
-                    suiteId: "Health",
-                    caseId: "PaginationNotReady",
-                    displayName: "Pagination support",
-                    skip: true,
-                    skipReason: "Not yet implemented",
-                    executeAsync: _ => Task.CompletedTask),
-            });
-    }
-
-    private static HttpClient CreateTestClient()
-    {
-        // Replace with WebApplicationFactory or any HttpClient setup.
-        return new HttpClient();
+        /// <summary>Add an item at the supplied price.</summary>
+        /// <exception cref="ArgumentOutOfRangeException">Price is negative.</exception>
+        public void AddItem(decimal price)
+        {
+            if (price < 0m) throw new ArgumentOutOfRangeException(nameof(price));
+            Total += price;
+            ItemCount++;
+        }
     }
 }
 ```
+
+Put the test definitions in `ShoppingCartSuites.cs`. The first descriptor checks the initial state directly. The second describes a purchase as a sequence of observable behaviors; its builder returns an ordinary descriptor alongside the other cases.
+
+```csharp
+namespace MyTests
+{
+    using System;
+    using System.Collections.Generic;
+    using System.Threading.Tasks;
+
+    using Touchstone.Core;
+
+    /// <summary>Shared cart tests consumed by every host.</summary>
+    public static class ShoppingCartSuites
+    {
+        /// <summary>All suites, with fresh definitions on each access.</summary>
+        public static IReadOnlyList<TestSuiteDescriptor> All
+        {
+            get { return new[] { CartSuite() }; }
+        }
+
+        /// <summary>Direct checks and behavior scenarios in one suite.</summary>
+        public static TestSuiteDescriptor CartSuite()
+        {
+            return new TestSuiteDescriptor(
+                suiteId: "Cart",
+                displayName: "Shopping cart",
+                cases: new TestCaseDescriptor[]
+                {
+                    new TestCaseDescriptor(
+                        suiteId: "Cart",
+                        caseId: "StartsEmpty",
+                        displayName: "A new cart starts empty",
+                        executeAsync: ct =>
+                        {
+                            ct.ThrowIfCancellationRequested();
+                            ShoppingCart cart = new ShoppingCart();
+                            if (cart.Total != 0m || cart.ItemCount != 0)
+                                throw new InvalidOperationException("Expected an empty cart.");
+                            return Task.CompletedTask;
+                        }),
+
+                    new ScenarioBuilder<ShoppingCart>(
+                        suiteId: "Cart",
+                        caseId: "AddingAnItem",
+                        displayName: "Adding an item increases the cart total",
+                        createContextAsync: ct =>
+                        {
+                            ct.ThrowIfCancellationRequested();
+                            return Task.FromResult(new ShoppingCart());
+                        })
+                        .Given("existing", "the cart contains a $10 item", (cart, ct) =>
+                        {
+                            ct.ThrowIfCancellationRequested();
+                            cart.AddItem(10m);
+                            return Task.CompletedTask;
+                        })
+                        .When("add", "a $25 item is added", (cart, ct) =>
+                        {
+                            ct.ThrowIfCancellationRequested();
+                            cart.AddItem(25m);
+                            return Task.CompletedTask;
+                        })
+                        .Then("total", "the cart total is $35", (cart, ct) =>
+                        {
+                            ct.ThrowIfCancellationRequested();
+                            if (cart.Total != 35m)
+                                throw new InvalidOperationException(
+                                    $"Expected total 35; received {cart.Total}.");
+                            return Task.CompletedTask;
+                        })
+                        .And("count", "the cart contains two items", (cart, ct) =>
+                        {
+                            ct.ThrowIfCancellationRequested();
+                            if (cart.ItemCount != 2)
+                                throw new InvalidOperationException(
+                                    $"Expected two items; received {cart.ItemCount}.");
+                            return Task.CompletedTask;
+                        })
+                        .Build(),
+
+                    new TestCaseDescriptor(
+                        suiteId: "Cart",
+                        caseId: "Discounts",
+                        displayName: "Discount codes reduce the total",
+                        executeAsync: ct => Task.CompletedTask,
+                        skip: true,
+                        skipReason: "Discount codes are not implemented"),
+                });
+        }
+    }
+}
+```
+
+Each scenario execution receives a fresh cart, shared only by that execution's steps. A failing step preserves its exception and leaves subsequent steps NotRun. And inherits the preceding step's kind, so the final expectation is reported as Then. The scenario remains one test case, regardless of its step count.
+
+For resource-owning contexts, Touchstone disposes the context after execution, including failure and cancellation. [BDD.md](BDD.md) covers cleanup, reusable steps, typed data examples, metadata, and cancellation in more detail. The following runner examples all consume `ShoppingCartSuites.All` unchanged.
 
 ### 3. Run via Console
 
 Create a console application that references your shared test library and `Touchstone.Cli`:
 
 ```csharp
+using MyTests;
 using Touchstone.Cli;
 
-return await ConsoleRunner.RunAsync(MyApiSuites.All);
+return await ConsoleRunner.RunAsync(ShoppingCartSuites.All);
 ```
 
 Run it directly:
@@ -164,29 +214,58 @@ dotnet run --project MyTests.Console
 
 The runner prints colored tabular results to stdout and returns a non-zero exit code if any test fails.
 
-Export results to JSON:
+Enable step output and write both report formats for the same suite:
 
 ```csharp
-return await ConsoleRunner.RunAsync(MyApiSuites.All, resultsPath: "results.json");
+using System.Threading;
+
+using MyTests;
+using Touchstone.Cli;
+
+ConsoleResultSink sink = new ConsoleResultSink { ExpandSteps = true };
+int exitCode = await ConsoleRunner.RunAsync(
+    ShoppingCartSuites.All,
+    sink,
+    resultsPath: "results.json",
+    cancellationToken: CancellationToken.None);
+
+await ScenarioHtmlReport.WriteAsync(
+    sink.AllResults,
+    "results.html",
+    "shopping-cart-run",
+    CancellationToken.None);
+
+return exitCode;
 ```
+
+The direct check, scenario, and skipped placeholder share one summary. JSON includes the scenario's ordered steps, and the HTML report opens offline. See [Console Runner Output](#console-runner-output) for compact and expanded examples.
 
 ### 4. Run via xUnit
 
-Create an xUnit test project that references your shared test library and `Touchstone.XunitAdapter`. Use the **theory-driven** pattern to get one xUnit test per descriptor:
+Create an xUnit test project that references your shared test library and `Touchstone.XunitAdapter`. Use the **theory-driven** pattern to get one xUnit test per non-skipped descriptor. The callback writes the scenario steps to xUnit output before any original failure is rethrown:
 
 ```csharp
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using MyTests;
 using Touchstone.Core;
 using Xunit;
+using Xunit.Abstractions;
 
-public sealed class MyApiTheoryTests
+public sealed class ShoppingCartTheoryTests
 {
+    private readonly ITestOutputHelper _Output;
+
+    public ShoppingCartTheoryTests(ITestOutputHelper output)
+    {
+        _Output = output;
+    }
+
     public static TheoryData<TestCaseDescriptor> TestCases()
     {
         TheoryData<TestCaseDescriptor> data = new TheoryData<TestCaseDescriptor>();
-        foreach (TestSuiteDescriptor suite in MyApiSuites.All)
+        foreach (TestSuiteDescriptor suite in ShoppingCartSuites.All)
             foreach (TestCaseDescriptor testCase in suite.Cases)
                 if (!testCase.Skip)
                     data.Add(testCase);
@@ -197,7 +276,9 @@ public sealed class MyApiTheoryTests
     [MemberData(nameof(TestCases))]
     public async Task RunTest(TestCaseDescriptor testCase)
     {
-        await TestExecutor.ExecuteCaseAsync(testCase, CancellationToken.None);
+        await ScenarioDiagnostics.ExecuteAsync(
+            testCase, text => _Output.WriteLine(text), CancellationToken.None)
+            .ConfigureAwait(false);
     }
 }
 ```
@@ -207,15 +288,16 @@ Or use the **fact-style** pattern to run all descriptors as a single `[Fact]`:
 ```csharp
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using MyTests;
 using Touchstone.Core;
 using Touchstone.XunitAdapter;
 using Xunit;
 
-public sealed class MyApiFactTests : TouchstoneFactBase
+public sealed class ShoppingCartFactTests : TouchstoneFactBase
 {
     protected override IReadOnlyList<TestSuiteDescriptor> Suites
     {
-        get { return MyApiSuites.All; }
+        get { return ShoppingCartSuites.All; }
     }
 
     [Fact]
@@ -234,29 +316,32 @@ dotnet test
 
 ### 5. Run via NUnit
 
-Create an NUnit test project that references your shared test library and `Touchstone.NunitAdapter`. Use **TestCaseSource** to get one NUnit test per descriptor:
+Create an NUnit test project that references your shared test library and `Touchstone.NunitAdapter`. Use **TestCaseSource** to get one NUnit test per descriptor. The same scenario definitions write their step diagnostics to NUnit progress output:
 
 ```csharp
 using System.Collections;
 using System.Threading;
 using System.Threading.Tasks;
+using MyTests;
 using NUnit.Framework;
 using Touchstone.Core;
 using Touchstone.NunitAdapter;
 
 [TestFixture]
-public sealed class MyApiNunitTests
+public sealed class ShoppingCartNunitTests
 {
     private static IEnumerable TestCases()
     {
-        return new TouchstoneTestCaseSource(MyApiSuites.All);
+        return new TouchstoneTestCaseSource(ShoppingCartSuites.All);
     }
 
     [Test]
     [TestCaseSource(nameof(TestCases))]
     public async Task RunTest(TestCaseDescriptor testCase)
     {
-        await TestExecutor.ExecuteCaseAsync(testCase, CancellationToken.None);
+        await ScenarioDiagnostics.ExecuteAsync(
+            testCase, text => TestContext.Progress.WriteLine(text), CancellationToken.None)
+            .ConfigureAwait(false);
     }
 }
 ```
@@ -266,16 +351,17 @@ Or use the **single-test** pattern to run all descriptors in one `[Test]`:
 ```csharp
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using MyTests;
 using NUnit.Framework;
 using Touchstone.Core;
 using Touchstone.NunitAdapter;
 
 [TestFixture]
-public sealed class MyApiNunitFactTests : TouchstoneNunitBase
+public sealed class ShoppingCartNunitFactTests : TouchstoneNunitBase
 {
     protected override IReadOnlyList<TestSuiteDescriptor> Suites
     {
-        get { return MyApiSuites.All; }
+        get { return ShoppingCartSuites.All; }
     }
 
     [Test]
@@ -288,29 +374,34 @@ public sealed class MyApiNunitFactTests : TouchstoneNunitBase
 
 ### 6. Run via MSTest
 
-Create an MSTest test project that references your shared test library and `Touchstone.MstestAdapter`. Use **DynamicData** to get one MSTest test per descriptor:
+Create an MSTest test project that references your shared test library and `Touchstone.MstestAdapter`. Use **DynamicData** to get one MSTest test per non-skipped descriptor. Send the scenario diagnostics to the native TestContext:
 
 ```csharp
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using MyTests;
 using Touchstone.Core;
 using Touchstone.MstestAdapter;
 
 [TestClass]
-public sealed class MyApiMstestTests
+public sealed class ShoppingCartMstestTests
 {
+    public TestContext TestContext { get; set; } = null!;
+
     public static IEnumerable<object[]> TestCases()
     {
-        return TouchstoneDynamicData.FromSuites(MyApiSuites.All);
+        return TouchstoneDynamicData.FromSuites(ShoppingCartSuites.All);
     }
 
     [TestMethod]
     [DynamicData(nameof(TestCases))]
     public async Task RunTest(TestCaseDescriptor testCase)
     {
-        await TestExecutor.ExecuteCaseAsync(testCase, CancellationToken.None);
+        await ScenarioDiagnostics.ExecuteAsync(
+            testCase, text => TestContext.WriteLine(text), CancellationToken.None)
+            .ConfigureAwait(false);
     }
 }
 ```
@@ -321,15 +412,16 @@ Or use the **single-test** pattern to run all descriptors in one `[TestMethod]`:
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using MyTests;
 using Touchstone.Core;
 using Touchstone.MstestAdapter;
 
 [TestClass]
-public sealed class MyApiMstestFactTests : TouchstoneMstestBase
+public sealed class ShoppingCartMstestFactTests : TouchstoneMstestBase
 {
     protected override IReadOnlyList<TestSuiteDescriptor> Suites
     {
-        get { return MyApiSuites.All; }
+        get { return ShoppingCartSuites.All; }
     }
 
     [TestMethod]
@@ -348,24 +440,36 @@ dotnet test
 
 ## Console Runner Output
 
-The console runner produces a three-column tabular summary:
+With the default sink, the walkthrough's direct check and scenario each occupy one row. The skipped descriptor retains its reason in the collected results. Timings below are illustrative.
 
-```
+```text
 Test                                              Result   Runtime
 ------------------------------------------------  ------  --------
-GET /health returns 200                           PASS       12ms
-GET /notes/{id} returns the stored payload        PASS        3ms
-Pagination support                                SKIP        0ms
-POST /notes with empty body returns 400           FAIL        8ms
+A new cart starts empty                           PASS        1ms
+Adding an item increases the cart total            PASS        2ms
+Discount codes reduce the total                   SKIP        0ms
 
-OVERALL                                           FAIL       23ms
-Total: 4  Passed: 2  Failed: 1  Skipped: 1
-Failed Tests:
-  POST /notes with empty body returns 400
-    Expected 400 BadRequest but got 200 OK
+OVERALL                                           PASS        3ms
+Total: 3  Passed: 2  Failed: 0  Skipped: 1
 ```
 
-Pass `--results <path>` to write JSON results to a file. Pass `--fail` (in the sample app) to toggle an intentional failure for verifying failure rendering.
+With `ExpandSteps = true`, the scenario also reports progress while each step executes:
+
+```text
+  Cart.AddingAnItem GIVEN the cart contains a $10 item...
+    Passed 0ms
+  Cart.AddingAnItem WHEN a $25 item is added...
+    Passed 0ms
+  Cart.AddingAnItem THEN the cart total is $35...
+    Passed 0ms
+  Cart.AddingAnItem THEN the cart contains two items...
+    Passed 0ms
+Adding an item increases the cart total            PASS        2ms
+```
+
+If the total assertion fails, its exception appears in the failure summary and the item-count step becomes NotRun. Collected results and JSON retain the complete step sequence, including unexecuted steps. Set `ConsoleResultSink.Redact` to sanitize names and messages before console or JSON output, and pass the same function to the HTML writer when needed.
+
+The repository's console hosts accept `--steps`, `--results <path>`, and `--html <path>`. Those flags are implemented by the host programs; custom console applications configure the sink and writers as shown above. The sample host also accepts `--fail` to demonstrate intentional failures.
 
 ## Telemetry
 
@@ -379,14 +483,14 @@ settings.Sources.AddActivitySource("Touchstone");
 
 using (RadiantHost host = RadiantHost.Start(settings))
 {
-    return await ConsoleRunner.RunAsync(MyApiSuites.All);
+    return await ConsoleRunner.RunAsync(ShoppingCartSuites.All);
 }
 ```
 
 What you get:
 
-- **Traces**: `touchstone.run` > `suite:<SuiteId>` > `stage:before_suite`, `case:<Suite>.<Case>`, `sink <event>`, `stage:after_suite`, plus `export json` from the console runner. Failed spans have `Error` status and an `exception` event. The case span is current while the test body runs, so HTTP calls the test makes carry its W3C `traceparent` and the server-side trace joins the test's trace.
-- **Metrics**: run, suite, stage, case, sink, and export counters and duration histograms (seconds) by outcome; `touchstone.errors` by stage and `error.type`; `touchstone.cases.active`; last-success timestamps per suite and per run; `touchstone.build.info`.
+- **Traces**: `touchstone.run` > `suite:<SuiteId>` > `stage:before_suite`, `case:<Suite>.<Case>`, `sink <event>`, `stage:after_suite`, plus `export json` and `export html` from the reporting layer. Scenario cases add `scenario:context`, `scenario:step`, and `scenario:cleanup` child activities. Failed spans have `Error` status and an `exception` event. The case span is current while the test body runs, so HTTP calls the test makes carry its W3C `traceparent` and the server-side trace joins the test's trace.
+- **Metrics**: run, suite, stage, case, sink, and export counters and duration histograms (seconds) by outcome; `touchstone.errors` by stage and `error.type`; `touchstone.cases.active`; last-success timestamps per suite and per run; `touchstone.build.info`. Scenarios also record context, step, and cleanup operation counts and durations with bounded kind/outcome labels.
 
 For theory-style hosts (xUnit `MemberData`, NUnit `TestCaseSource`, MSTest `DynamicData`), call `TestExecutor.ExecuteCaseAsync(testCase, ct)` so each row is instrumented. It rethrows the original exception. `TestExecutor.RunAsync(suites, sink, ct)` runs several suites under one run span, and `TestResultCollector` is a ready-made sink that keeps results in memory.
 
@@ -394,24 +498,29 @@ For theory-style hosts (xUnit `MemberData`, NUnit `TestCaseSource`, MSTest `Dyna
 
 ## Sample App
 
-The repository includes **Touchstone.SampleApp**, a reference Notes CRUD API with shared integration tests that demonstrate both runners side by side:
+The repository includes **Touchstone.SampleApp**, a reference Notes API with direct integration checks and BDD scenarios for persistence, missing notes, and invalid input. Every scenario owns an isolated in-process application and runs through the same console, xUnit, NUnit, and MSTest hosts:
 
 ```bash
 # Run tests via the console runner
 dotnet run --project tests/Touchstone.SampleApp.Tests.Console
 
-# Run the same tests via xUnit
+# Inspect live scenario steps and generate an offline report
+dotnet run --project tests/Touchstone.SampleApp.Tests.Console -- --steps --html notes.html
+
+# Run the same definitions through each framework
 dotnet test tests/Touchstone.SampleApp.Tests.Xunit
+dotnet test tests/Touchstone.SampleApp.Tests.Nunit
+dotnet test tests/Touchstone.SampleApp.Tests.Mstest
 
 # Run both back to back
 go.bat
 ```
 
-The sample app validates the API surface before adopting it in production consumer repos.
+Browse [NotesScenarios.cs](tests/Touchstone.SampleApp.Tests.Shared/NotesScenarios.cs) and [NotesScenarioContext.cs](tests/Touchstone.SampleApp.Tests.Shared/NotesScenarioContext.cs) for a complete HTTP example. The same pattern used for the cart applies to application clients, responses, assertions, and resource cleanup.
 
 ## Testing Touchstone
 
-Touchstone tests itself using its own descriptor model. The test projects follow the same layout recommended for consumers:
+Touchstone tests itself using ordinary descriptors and BDD scenarios in the same shared suites. Scenario contract checks cover lifecycle, isolation, failures, cancellation, reporting, and telemetry across all hosts. The test projects follow the same layout recommended for consumers:
 
 | Project | Purpose |
 |---|---|
@@ -430,6 +539,8 @@ dotnet test src/Test.Xunit
 dotnet test src/Test.Nunit
 dotnet test src/Test.Mstest
 ```
+
+The [benchmark harness](BENCHMARKING.md) measures delegate and scenario execution overhead with listeners on and off; [recorded results](benchmarks/RESULTS.md) include methodology and limitations.
 
 ## Target Frameworks
 

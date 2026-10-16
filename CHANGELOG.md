@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Integrated BDD into the README walkthrough: a shared shopping-cart suite demonstrates delegate checks and behavior scenarios, followed by console/native host execution, step output, reports, and telemetry.
+
 ## [v0.3.0-alpha] - 2026-10-16
 
 ### Added
