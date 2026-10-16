@@ -57,4 +57,3 @@ Pushing Touchstone.0.3.0-alpha.snupkg to 'https://www.nuget.org/api/v2/symbolpac
   PUT https://www.nuget.org/api/v2/symbolpackage/
   Created https://www.nuget.org/api/v2/symbolpackage/ 188ms
 Your package was pushed.
-
