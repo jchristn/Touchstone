@@ -1,0 +1,74 @@
+[
+  {
+    "file": "Touchstone.0.3.0-alpha.nupkg",
+    "sha256": "a4de461369203be42c53a4d6e44ba5be116fa33f619df7d0e05075e7a44d4719",
+    "bytes": 80704,
+    "sourceCommit": "454907e4d14c717e6005447b7cb7bc38dda790ef"
+  },
+  {
+    "file": "Touchstone.0.3.0-alpha.snupkg",
+    "sha256": "4ca7d2c1dce1d8585f1835da7eea3fe2b1a9497f1cf2e9cb49acc9bc82bd860b",
+    "bytes": 17139,
+    "sourceCommit": "454907e4d14c717e6005447b7cb7bc38dda790ef"
+  },
+  {
+    "file": "Touchstone.Cli.0.3.0-alpha.nupkg",
+    "sha256": "b846866001c3f66edf3def330ebb38323f9dc158118e24d33f577cf11022cd1e",
+    "bytes": 105207,
+    "sourceCommit": "454907e4d14c717e6005447b7cb7bc38dda790ef"
+  },
+  {
+    "file": "Touchstone.Cli.0.3.0-alpha.snupkg",
+    "sha256": "06f825534dffcdc129f84d302436a8e27b47cc2facc36ff7f420e7a834d88573",
+    "bytes": 21571,
+    "sourceCommit": "454907e4d14c717e6005447b7cb7bc38dda790ef"
+  },
+  {
+    "file": "Touchstone.Core.0.3.0-alpha.nupkg",
+    "sha256": "d4cff7ec014bdf40a24eba1db52eb79c5422769761e0adc9e98f164adb74cf79",
+    "bytes": 133600,
+    "sourceCommit": "454907e4d14c717e6005447b7cb7bc38dda790ef"
+  },
+  {
+    "file": "Touchstone.Core.0.3.0-alpha.snupkg",
+    "sha256": "f7a1cbdf172747cf92d61a078bfd230907f13ce1512129bcf498aba038f15ba2",
+    "bytes": 28996,
+    "sourceCommit": "454907e4d14c717e6005447b7cb7bc38dda790ef"
+  },
+  {
+    "file": "Touchstone.MstestAdapter.0.3.0-alpha.nupkg",
+    "sha256": "b189a269f3176c924a7380748b36176b3fc88224d21186fd8626bd7dbb3eebe2",
+    "bytes": 87338,
+    "sourceCommit": "454907e4d14c717e6005447b7cb7bc38dda790ef"
+  },
+  {
+    "file": "Touchstone.MstestAdapter.0.3.0-alpha.snupkg",
+    "sha256": "e1f6410971275f31a3fdee48109603e7c252f9cacc548a8f52164ef022115f01",
+    "bytes": 17186,
+    "sourceCommit": "454907e4d14c717e6005447b7cb7bc38dda790ef"
+  },
+  {
+    "file": "Touchstone.NunitAdapter.0.3.0-alpha.nupkg",
+    "sha256": "c66fd7d0560d612252c61c955f7d60afa73211cf7f6cda16e27b1e37763ca75c",
+    "bytes": 86944,
+    "sourceCommit": "454907e4d14c717e6005447b7cb7bc38dda790ef"
+  },
+  {
+    "file": "Touchstone.NunitAdapter.0.3.0-alpha.snupkg",
+    "sha256": "84d550d35f2febb274f95e8fa14c289ee309264eaa9d8857e5c5e0b2a0b983a8",
+    "bytes": 17214,
+    "sourceCommit": "454907e4d14c717e6005447b7cb7bc38dda790ef"
+  },
+  {
+    "file": "Touchstone.XunitAdapter.0.3.0-alpha.nupkg",
+    "sha256": "e30fa1bacb906f770bdcc02dbeba2d0daf0566e9dcd2840a286fb325d460e62a",
+    "bytes": 87234,
+    "sourceCommit": "454907e4d14c717e6005447b7cb7bc38dda790ef"
+  },
+  {
+    "file": "Touchstone.XunitAdapter.0.3.0-alpha.snupkg",
+    "sha256": "a7a86d21e81594451b6a17a356f04a835ddf35a42f6ee838f154e13d639839c1",
+    "bytes": 17575,
+    "sourceCommit": "454907e4d14c717e6005447b7cb7bc38dda790ef"
+  }
+]

@@ -1,6 +1,6 @@
 # Behavior Driven Development Plan
 
-Status: Implementation complete. Release verification and publication are in progress; see the completion ledger and BDD_VERIFICATION.md.
+Status: Complete. Implementation, local verification, benchmark baseline/gate, and NuGet package/symbol publication are complete. See BDD_VERIFICATION.md for release evidence and operational follow-ups.
 
 Plan date: 2026-10-16
 
@@ -25,7 +25,7 @@ Use `[ ]` for unfinished tasks and `[x]` only when the task's acceptance criteri
 | P4: Framework adapters | Complete | Codex | 2026-10-16 | 2026-10-16 | BDD_VERIFICATION.md |
 | P5: Telemetry | Complete | Codex | 2026-10-16 | 2026-10-16 | BDD_VERIFICATION.md |
 | P6: Examples and documentation | Complete | Codex | 2026-10-16 | 2026-10-16 | BDD_VERIFICATION.md |
-| P7: Verification and packaging | In progress | Codex | 2026-10-16 | | Final benchmark baseline, clean-source package rebuild, publication |
+| P7: Verification and packaging | Complete | Codex | 2026-10-16 | 2026-10-16 | 454907e; BDD_VERIFICATION.md; published 6 packages and 6 symbols |
 | P8: Offline HTML report | Complete | Codex | 2026-10-16 | 2026-10-16 | Automated coverage and Chrome visual inspection |
 
 Task update template:
@@ -165,9 +165,9 @@ Acceptance: a developer can copy a documented example into a shared project refe
 - [x] **P7.2** Run all four sample hosts on `net10.0`; inspect compact/expanded console output and JSON artifacts. Confirm the intentional failure returns non-zero and normal runs succeed.
 - [x] **P7.3** Compile the P0 compatibility fixture against the new assemblies, compare public signatures and legacy JSON fixtures, and inspect package dependency graphs for accidental framework or exporter dependencies in Core.
 - [x] **P7.4** Add `src/Test.Benchmark` and `benchmarks/` assets following `BENCHMARKING.md`. Exercise the public console surface in a separate process for ordinary cases versus one-step and multi-step scenarios, with telemetry listeners off/on. Record runtime/SDK, OS, CPU, commit, dirty state, configuration hash, counts, errors, warmups, repetitions, elapsed time, and memory measurement method. Include a no-work process floor and current delegate-case reference.
-- [ ] **P7.5** Commit baseline artifacts and a comparison command/CI gate. Reject incomplete or incorrect runs; use paired repetitions, documented tolerances and significance checks. Establish the threshold from measured baseline noise in P0/P7, then record it here before accepting results. Do not make performance claims without evidence.
+- [x] **P7.5** Commit baseline artifacts and a comparison command/CI gate. Reject incomplete or incorrect runs; use paired repetitions, documented tolerances and significance checks. Establish the threshold from measured baseline noise in P0/P7, then record it here before accepting results. Do not make performance claims without evidence.
 - [x] **P7.6** Pack Release artifacts and inspect README, icon, license file/metadata, XML documentation, symbols, target frameworks, and dependencies. Align packaged license files with the requirements while preserving valid MIT metadata. Leave package versions unchanged.
-- [ ] **P7.7** Review the final diff for scope, requirements compliance, no suppressed diagnostics, no generated artifacts accidentally staged, and no prohibited framework name. Complete the task ledger with command output and artifact references.
+- [x] **P7.7** Review the final diff for scope, requirements compliance, no suppressed diagnostics, no generated artifacts accidentally staged, and no prohibited framework name. Complete the task ledger with command output and artifact references.
 
 Run these commands from the repository root. Expand each shared runner command for both target frameworks; the sample projects target only `net10.0`.
 
@@ -226,3 +226,12 @@ The user explicitly authorized implementing this plan, selecting a new version, 
 | D9 | Existing telemetry cases retain full exception events for compatibility. New scenario activities record type-only exception events. | TELEMETRY.md and telemetry tests. |
 
 The requirements audit enabled nullable analysis and explicit usings in affected libraries, added package license assets and Docker Hub repository guidance, and recorded the library-only applicability of hosting, Docker, authentication, and dashboard requirements. Existing sample hosting is unchanged. No new REST, MCP, database, installer, or dashboard surface was introduced.
+
+
+## Completion evidence
+
+Implementation commit: `454907e4d14c717e6005447b7cb7bc38dda790ef`. All checked implementation tasks map to that commit and the command/results table in BDD_VERIFICATION.md. The completion-evidence commit contains the clean-source benchmark reports, release manifest, publication receipt, and final checklist updates.
+
+P7.5 evidence: both 96-sample benchmark reports under `benchmarks/baselines/` identify the same clean source commit and matching configuration. The paired gate reports no regression; seven comparator contract checks pass. Measured values and interpretation are in `benchmarks/RESULTS.md`. The conservative 20 percent budget remains appropriate for this initial cold-process suite; tightening it requires more matched-machine noise data.
+
+P7.7 evidence: Release build has zero warnings/errors; shared console checks pass on both targets; all nine native framework runs pass; API signatures and an old compiled consumer remain compatible; package ZIP/nuspec/PDB inspection passes. The release manifest identifies all twelve artifacts. NuGet returned HTTP Created for all six package and six symbol uploads. Remote cross-platform CI and provisioning a dedicated benchmark runner remain explicitly documented operational follow-ups.

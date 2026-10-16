@@ -42,6 +42,10 @@ On macOS the managed peak-working-set API returned zero. The workload now uses D
 
 ## Release completion
 
-The implementation commit is the first commit containing this file and the archived plan. Final benchmark baseline/comparison evidence and package publication receipts will be added after the clean-source release build. No credentials are stored in repository files, generated reports, or package contents.
+Implementation commit: `454907e4d14c717e6005447b7cb7bc38dda790ef`. Packages were rebuilt after that commit so their repository metadata identifies the actual implementation source. A separate consumer installed the metapackage from the built packages in an isolated cache and executed a scenario on both .NET 8 and .NET 10.
+
+The two clean-source benchmark runs each contain all 96 expected samples and identical source/dataset/configuration hashes. The paired comparison reports no regression. Full provenance and measurements are committed under `benchmarks/baselines/`; `benchmarks/RESULTS.md` explains the measured costs and limitations. All seven gate-contract tests pass against the final baseline.
+
+NuGet accepted every `.nupkg` and corresponding `.snupkg` with HTTP Created. The six published package IDs are Touchstone.Core, Touchstone.Cli, Touchstone.XunitAdapter, Touchstone.NunitAdapter, Touchstone.MstestAdapter, and Touchstone, all version 0.3.0-alpha. See BDD_NUGET_PUBLICATION.txt for the sanitized upload receipts and BDD_RELEASE_MANIFEST.json for local artifact hashes (before NuGet server signing). No credentials are stored in repository files, generated reports, or package contents.
 
 Cross-platform CI is configured for macOS, Linux, and Windows; only macOS was available locally. A dedicated self-hosted benchmark runner must be provisioned before enabling the optional timing gate. Hosted runners still execute the correctness, build, and packaging checks. This is an operational follow-up, not a claim that remote CI has already passed.

@@ -1,0 +1,60 @@
+Touchstone.Core
+Pushing Touchstone.Core.0.3.0-alpha.nupkg to 'https://www.nuget.org/api/v2/package'...
+  PUT https://www.nuget.org/api/v2/package/
+  Created https://www.nuget.org/api/v2/package/ 880ms
+Your package was pushed.
+Pushing Touchstone.Core.0.3.0-alpha.snupkg to 'https://www.nuget.org/api/v2/symbolpackage'...
+  PUT https://www.nuget.org/api/v2/symbolpackage/
+  Created https://www.nuget.org/api/v2/symbolpackage/ 202ms
+Your package was pushed.
+
+Touchstone.Cli
+Pushing Touchstone.Cli.0.3.0-alpha.nupkg to 'https://www.nuget.org/api/v2/package'...
+  PUT https://www.nuget.org/api/v2/package/
+  Created https://www.nuget.org/api/v2/package/ 742ms
+Your package was pushed.
+Pushing Touchstone.Cli.0.3.0-alpha.snupkg to 'https://www.nuget.org/api/v2/symbolpackage'...
+  PUT https://www.nuget.org/api/v2/symbolpackage/
+  Created https://www.nuget.org/api/v2/symbolpackage/ 210ms
+Your package was pushed.
+
+Touchstone.XunitAdapter
+Pushing Touchstone.XunitAdapter.0.3.0-alpha.nupkg to 'https://www.nuget.org/api/v2/package'...
+  PUT https://www.nuget.org/api/v2/package/
+  Created https://www.nuget.org/api/v2/package/ 716ms
+Your package was pushed.
+Pushing Touchstone.XunitAdapter.0.3.0-alpha.snupkg to 'https://www.nuget.org/api/v2/symbolpackage'...
+  PUT https://www.nuget.org/api/v2/symbolpackage/
+  Created https://www.nuget.org/api/v2/symbolpackage/ 186ms
+Your package was pushed.
+
+Touchstone.NunitAdapter
+Pushing Touchstone.NunitAdapter.0.3.0-alpha.nupkg to 'https://www.nuget.org/api/v2/package'...
+  PUT https://www.nuget.org/api/v2/package/
+  Created https://www.nuget.org/api/v2/package/ 718ms
+Your package was pushed.
+Pushing Touchstone.NunitAdapter.0.3.0-alpha.snupkg to 'https://www.nuget.org/api/v2/symbolpackage'...
+  PUT https://www.nuget.org/api/v2/symbolpackage/
+  Created https://www.nuget.org/api/v2/symbolpackage/ 201ms
+Your package was pushed.
+
+Touchstone.MstestAdapter
+Pushing Touchstone.MstestAdapter.0.3.0-alpha.nupkg to 'https://www.nuget.org/api/v2/package'...
+  PUT https://www.nuget.org/api/v2/package/
+  Created https://www.nuget.org/api/v2/package/ 716ms
+Your package was pushed.
+Pushing Touchstone.MstestAdapter.0.3.0-alpha.snupkg to 'https://www.nuget.org/api/v2/symbolpackage'...
+  PUT https://www.nuget.org/api/v2/symbolpackage/
+  Created https://www.nuget.org/api/v2/symbolpackage/ 208ms
+Your package was pushed.
+
+Touchstone
+Pushing Touchstone.0.3.0-alpha.nupkg to 'https://www.nuget.org/api/v2/package'...
+  PUT https://www.nuget.org/api/v2/package/
+  Created https://www.nuget.org/api/v2/package/ 739ms
+Your package was pushed.
+Pushing Touchstone.0.3.0-alpha.snupkg to 'https://www.nuget.org/api/v2/symbolpackage'...
+  PUT https://www.nuget.org/api/v2/symbolpackage/
+  Created https://www.nuget.org/api/v2/symbolpackage/ 188ms
+Your package was pushed.
+
