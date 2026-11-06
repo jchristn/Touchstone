@@ -7,14 +7,10 @@ namespace Touchstone.SampleApp.Tests.Shared
     using System.Threading;
     using System.Threading.Tasks;
 
-    using Microsoft.AspNetCore.Hosting;
-    using Microsoft.AspNetCore.Mvc.Testing;
-    using Microsoft.Extensions.Logging;
-
     /// <summary>Owns an isolated in-process Notes server and client for one scenario execution.</summary>
     public sealed class NotesScenarioContext : IAsyncDisposable
     {
-        private readonly WebApplicationFactory<Program> _Factory;
+        private readonly SampleApiHost _Host;
         private readonly HttpClient _Client;
         private string _NoteId = string.Empty;
         private HttpStatusCode _Status;
@@ -23,12 +19,8 @@ namespace Touchstone.SampleApp.Tests.Shared
         /// <summary>Create an isolated application and a client using an IPv4 loopback base URL.</summary>
         public NotesScenarioContext()
         {
-            _Factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-            {
-                builder.UseContentRoot(AppContext.BaseDirectory);
-                builder.ConfigureLogging(logging => logging.ClearProviders());
-            });
-            _Client = _Factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("http://127.0.0.1") });
+            _Host = new SampleApiHost();
+            _Client = _Host.Client;
         }
         /// <summary>Create the note used by this scenario.</summary>
         /// <exception cref="InvalidOperationException">The server did not return a valid note.</exception>
@@ -83,8 +75,7 @@ namespace Touchstone.SampleApp.Tests.Shared
         /// <inheritdoc />
         public async ValueTask DisposeAsync()
         {
-            _Client.Dispose();
-            await _Factory.DisposeAsync().ConfigureAwait(false);
+            await _Host.DisposeAsync().ConfigureAwait(false);
         }
     }
 }

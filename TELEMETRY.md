@@ -21,6 +21,7 @@ Every name and value below is public contract, defined as a constant in `Touchst
 - [Recommended alerts (PromQL)](#recommended-alerts-promql)
 - [Dashboards](#dashboards)
 - [Guarantees](#guarantees)
+- [Changes in 1.1](#changes-in-11)
 - [Changes in 1.0](#changes-in-10)
 
 ## Meter and source names
@@ -90,6 +91,7 @@ Prometheus names are what the OpenTelemetry Prometheus exporter produces (dots b
 | `touchstone.case.duration` | `touchstone_case_duration_seconds` | Histogram | `s` | `suite`, `outcome` | Case duration. Skipped cases record 0. Not recorded for `not_run`. |
 | `touchstone.cases.active` | `touchstone_cases_active` | UpDownCounter | `{case}` | `suite` | Cases executing now. A value stuck above 0 means a hung case. |
 | `touchstone.cases.filtered` | `touchstone_cases_filtered_total` | Counter | `{case}` | `suite` | Cases excluded by the filter or by `SkipBehavior.Omit`. |
+| `touchstone.case.timeouts` | `touchstone_case_timeouts_total` | Counter | `{case}` | `suite` | Cases that exceeded `TestRunOptions.CaseTimeout`. Each one is also counted in `touchstone.cases` with outcome `failed` and in `touchstone.errors` with `error.type` `Touchstone.Core.CaseTimeoutException`. |
 | `touchstone.sink.events` | `touchstone_sink_events_total` | Counter | `{event}` | `event`, `outcome` | `ITestResultSink` callbacks. |
 | `touchstone.sink.duration` | `touchstone_sink_duration_seconds` | Histogram | `s` | `event`, `outcome` | Sink callback duration. |
 | `touchstone.errors` | `touchstone_errors_total` | Counter | `{error}` | `stage`, `error.type`, `suite` (not on `stage="run"`) | Failures by where they happened and exception type. |
@@ -119,7 +121,7 @@ Prometheus names are what the OpenTelemetry Prometheus exporter produces (dots b
 
 Case identities, display names, tags, skip reasons, step names, and exception messages never appear on metrics. They appear on spans only.
 
-Touchstone runs suites and cases sequentially and holds no pools, queues, or concurrency slots.
+Suites always run one after another. Cases within a suite run one at a time unless `TestRunOptions.MaxDegreeOfParallelism` is above 1, in which case up to that many run at once and `touchstone.cases.active` can reach that value per suite. Touchstone holds no pools or queues beyond the per-suite limit.
 
 ## Spans catalog
 
@@ -127,10 +129,10 @@ Span names are fixed, so they stay low-cardinality; identities are attributes. A
 
 | Span name | Parent | Emitted by | Attributes |
 |---|---|---|---|
-| `touchstone.run` | caller's `Activity.Current` (root otherwise) | `TestExecutor.RunAsync` | `touchstone.suite.count`, `touchstone.case.count`, `touchstone.passed_count`, `touchstone.failed_count`, `touchstone.skipped_count`, `touchstone.canceled_count`, `touchstone.not_run_count`, `touchstone.filtered_count`, `touchstone.outcome` |
-| `touchstone.suite` | `touchstone.run` or caller | `TestExecutor.RunSuiteAsync` and `RunAsync` | `touchstone.suite.id`, `touchstone.suite.display_name`, `touchstone.case.count` and the same count attributes, `touchstone.outcome` |
+| `touchstone.run` | caller's `Activity.Current` (root otherwise) | `TestExecutor.RunAsync` | `touchstone.max_degree_of_parallelism`, `touchstone.suite.count`, `touchstone.case.count`, `touchstone.passed_count`, `touchstone.failed_count`, `touchstone.skipped_count`, `touchstone.canceled_count`, `touchstone.not_run_count`, `touchstone.filtered_count`, `touchstone.outcome` |
+| `touchstone.suite` | `touchstone.run` or caller | `TestExecutor.RunSuiteAsync` and `RunAsync` | `touchstone.max_degree_of_parallelism`, `touchstone.suite.id`, `touchstone.suite.display_name`, `touchstone.case.count` and the same count attributes, `touchstone.outcome` |
 | `touchstone.stage` | suite | setup and teardown | `touchstone.suite.id`, `stage` (`before_suite` or `after_suite`), `touchstone.outcome` |
-| `touchstone.case` | suite, or caller for single-case entry points | every case execution | `touchstone.suite.id`, `touchstone.case.id`, `touchstone.test.id`, `touchstone.case.display_name`, `touchstone.case.tags`, `touchstone.case.skip_reason`, `touchstone.outcome` |
+| `touchstone.case` | suite, or caller for single-case entry points | every case execution | `touchstone.suite.id`, `touchstone.case.id`, `touchstone.test.id`, `touchstone.case.display_name`, `touchstone.case.tags`, `touchstone.case.skip_reason`, `touchstone.case.timed_out` (`true`, only on a case that exceeded its timeout), `touchstone.outcome` |
 | `touchstone.scenario.context` | case | scenario context creation | `touchstone.outcome` |
 | `touchstone.scenario.step` | case | each executed scenario step | `touchstone.step.kind`, `touchstone.outcome` |
 | `touchstone.scenario.cleanup` | case | scenario cleanup and disposal | `touchstone.outcome` |
@@ -143,7 +145,7 @@ A run that did not succeed (but where nothing threw) ends with `Error` status an
 
 - Spans nest under whatever `Activity.Current` is when Touchstone is called, so a host that starts its own activity (or receives a `traceparent`) gets the whole run inside its trace.
 - The case span is current inside the case body, and the step span inside each step. Instrumented clients inject the W3C `traceparent` automatically.
-- Touchstone does no background hand-off. Everything runs on the caller's async flow.
+- With `MaxDegreeOfParallelism` at 1 (the default), everything runs on the caller's async flow. Above 1, each case is started on the thread pool from the suite's async flow, so `Activity.Current` and other `AsyncLocal` values flow into it and every case span is a child of its suite span.
 
 ## Recommended alerts (PromQL)
 
@@ -165,6 +167,9 @@ histogram_quantile(0.95, sum by (le, suite) (rate(touchstone_case_duration_secon
 
 # A case appears hung
 max by (suite) (touchstone_cases_active) > 0 and max by (suite) (changes(touchstone_cases_total[10m])) == 0
+
+# Cases are hitting their timeout
+sum by (suite) (increase(touchstone_case_timeouts_total[15m])) > 0
 
 # A result sink is failing (for example a results server is down)
 sum by (event) (increase(touchstone_sink_events_total{outcome="failed"}[15m])) > 0
@@ -192,6 +197,16 @@ To go from a failing panel to the failing case, search traces for `name = "touch
 - With no listener, every code path behaves the same.
 - No secrets, payloads, or test inputs are recorded. Spans carry identities, names, tags, skip reasons, and, on case and stage spans, the exception type, message, and stack trace of failures. If exception messages can contain sensitive data, filter the `exception` event in the collector; report redaction callbacks do not rewrite telemetry.
 - Metric labels are bounded: fixed enumerations plus `suite` (controllable with `SuiteLabelEnabled`) and `error.type`.
+
+## Changes in 1.1
+
+1.1 adds names and changes none. Dashboards and alerts built on 1.0 keep working.
+
+| Name | Kind | Meaning |
+|---|---|---|
+| `touchstone.case.timeouts` | Counter | Cases that exceeded `TestRunOptions.CaseTimeout`. |
+| `touchstone.case.timed_out` | Case span attribute | `true` when the case exceeded its timeout. |
+| `touchstone.max_degree_of_parallelism` | Run and suite span attribute | The `TestRunOptions.MaxDegreeOfParallelism` the run used. |
 
 ## Changes in 1.0
 

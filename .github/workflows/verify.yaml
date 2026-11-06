@@ -66,7 +66,7 @@ jobs:
       - name: Benchmark comparison gate logic
         run: python benchmarks/verify-gate.py
 
-      - name: Test catalog coverage (archive/V1.0_PLAN.md section 11)
+      - name: Test catalog coverage (archive/V1.0_PLAN.md section 11, archive/V1.1_PLAN.md section 5)
         shell: bash
         run: |
           python scripts/verify-catalog.py --require-all --trx "$RESULTS/trx" \

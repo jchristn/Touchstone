@@ -41,9 +41,10 @@ namespace Touchstone.Core
             get { return _Metadata; }
         }
 
-        public async Task<TestResult> ExecuteAsync(TestCaseDescriptor descriptor, ITestResultSink? sink, CancellationToken cancellationToken)
+        public async Task<TestResult> ExecuteAsync(TestCaseDescriptor descriptor, ITestResultSink? sink, CancellationToken cancellationToken, CaseDeadline? deadline)
         {
-            Execution execution = new Execution(descriptor);
+            Execution execution = new Execution(descriptor, cancellationToken);
+            CancellationToken caseToken = deadline != null ? deadline.Token : cancellationToken;
             Stopwatch total = Stopwatch.StartNew();
 
             if (descriptor.IsSkipped)
@@ -58,7 +59,7 @@ namespace Touchstone.Core
             }
 
             TContext context = default!;
-            bool created = await CreateContextAsync(execution, cancellationToken).ConfigureAwait(false);
+            bool created = await CreateContextAsync(execution, caseToken).ConfigureAwait(false);
             if (created) context = execution.Context!;
 
             try
@@ -72,11 +73,13 @@ namespace Touchstone.Core
                         continue;
                     }
 
-                    await RunStepAsync(execution, step, context, sink, cancellationToken).ConfigureAwait(false);
+                    await RunStepAsync(execution, step, context, sink, caseToken).ConfigureAwait(false);
                 }
             }
             finally
             {
+                // The case timeout covers context creation and steps, not cleanup.
+                deadline?.Stop();
                 if (created) await CleanupAsync(execution, context).ConfigureAwait(false);
             }
 
@@ -116,7 +119,7 @@ namespace Touchstone.Core
             }
             catch (Exception ex)
             {
-                execution.SetFailure(ex, cancellationToken, "Context creation: ");
+                execution.SetFailure(ex, "Context creation: ");
                 return false;
             }
             finally
@@ -162,7 +165,7 @@ namespace Touchstone.Core
             catch (Exception ex)
             {
                 error = ex;
-                if (execution.ObserverError == null) execution.SetFailure(ex, cancellationToken, string.Empty);
+                if (execution.ObserverError == null) execution.SetFailure(ex, string.Empty);
                 outcome = execution.Canceled ? ScenarioStepOutcome.Canceled : ScenarioStepOutcome.Failed;
             }
             finally
@@ -236,10 +239,13 @@ namespace Touchstone.Core
 
         private sealed class Execution
         {
-            internal Execution(TestCaseDescriptor descriptor)
+            internal Execution(TestCaseDescriptor descriptor, CancellationToken callerToken)
             {
                 Descriptor = descriptor;
+                CallerToken = callerToken;
             }
+
+            internal CancellationToken CallerToken { get; }
 
             internal TestCaseDescriptor Descriptor { get; }
 
@@ -257,11 +263,11 @@ namespace Touchstone.Core
 
             internal Exception? ObserverError { get; set; }
 
-            internal void SetFailure(Exception error, CancellationToken cancellationToken, string prefix)
+            internal void SetFailure(Exception error, string prefix)
             {
                 Error = error;
                 Message = prefix + error.Message;
-                Canceled = TestExecutor.IsCallerCancellation(error, cancellationToken);
+                Canceled = TestExecutor.IsCallerCancellation(error, CallerToken);
             }
 
             internal string OperationOutcome()

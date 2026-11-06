@@ -2,6 +2,7 @@ namespace Touchstone.Cli
 {
     using System;
     using System.Collections.Generic;
+    using System.Globalization;
     using System.IO;
 
     using Touchstone.Core;
@@ -23,6 +24,8 @@ namespace Touchstone.Cli
             + "  --test <ids>          Run only these test identities, SuiteId.CaseId (repeatable, comma-separated).\n"
             + "  --skip <mode>         How to treat skipped cases: report (default), omit, or fail.\n"
             + "  --stop-on-failure     Stop the run at the first failed case.\n"
+            + "  --case-timeout <s>    Fail any case that runs longer than this many seconds (0.001 to 86400).\n"
+            + "  --parallel <n>        Run up to n cases of a suite at the same time (1 to 1024). Default 1.\n"
             + "  --results <path>      Write JSON results to this file.\n"
             + "  --html <path>         Write an HTML report to this file.\n"
             + "  --expand              Show scenario steps as they run.\n"
@@ -142,6 +145,12 @@ namespace Touchstone.Cli
                     case "--stop-on-failure":
                         options.Run.StopOnFirstFailure = true;
                         break;
+                    case "--case-timeout":
+                        options.Run.CaseTimeout = ParseCaseTimeout(Value(args, ref i, arg));
+                        break;
+                    case "--parallel":
+                        options.Run.MaxDegreeOfParallelism = ParseParallel(Value(args, ref i, arg));
+                        break;
                     case "--results":
                         options.JsonResultsPath = Value(args, ref i, arg);
                         break;
@@ -192,6 +201,21 @@ namespace Touchstone.Cli
                 if (trimmed.Length == 0) throw new ConsoleArgumentException("Option '" + option + "' has an empty value.");
                 target.Add(trimmed);
             }
+        }
+
+        private static TimeSpan ParseCaseTimeout(string value)
+        {
+            if (!double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double seconds)
+                || double.IsNaN(seconds) || seconds < 0.001 || seconds > 86400)
+                throw new ConsoleArgumentException("Option '--case-timeout' must be a number of seconds from 0.001 to 86400, not '" + value + "'.");
+            return TimeSpan.FromSeconds(seconds);
+        }
+
+        private static int ParseParallel(string value)
+        {
+            if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out int count) || count < 1 || count > 1024)
+                throw new ConsoleArgumentException("Option '--parallel' must be a whole number from 1 to 1024, not '" + value + "'.");
+            return count;
         }
 
         private static SkipBehavior ParseSkip(string value)

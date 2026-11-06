@@ -35,7 +35,7 @@ namespace Touchstone.MstestAdapter
             if (testCase == null) throw new ArgumentNullException(nameof(testCase));
 
             TestCaseDescriptor descriptor = CaseIndex.Resolve(CaseIndex.ProviderType(testCase.ProviderType), testCase.TestId);
-            TestRunOptions options = new TestRunOptions { SkipBehavior = testCase.SkipBehavior };
+            TestRunOptions options = new TestRunOptions { SkipBehavior = testCase.SkipBehavior, CaseTimeout = testCase.CaseTimeout };
             Touchstone.Core.TestResult result = await TestExecutor.ExecuteCaseResultAsync(descriptor, null, options, cancellationToken).ConfigureAwait(false);
 
             string diagnostics = ScenarioDiagnostics.Format(result);

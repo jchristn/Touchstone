@@ -24,6 +24,8 @@ namespace Test.Shared
                     .Concat(FilterSuites.All())
                     .Concat(ExecutionSuites.All())
                     .Concat(CancellationSuites.All())
+                    .Concat(TimeoutSuites.All())
+                    .Concat(ParallelismSuites.All())
                     .Concat(ScenarioSuites.All())
                     .Concat(SinkSuites.All())
                     .Concat(CliSuites.All())

@@ -3,6 +3,7 @@ namespace Touchstone.Core
     using System;
     using System.Collections.Generic;
     using System.Diagnostics;
+    using System.Runtime.ExceptionServices;
     using System.Threading;
     using System.Threading.Tasks;
 
@@ -49,6 +50,7 @@ namespace Touchstone.Core
 
             RunState state = new RunState();
             Activity? activity = TouchstoneInstrumentation.StartRun(suites.Count);
+            TouchstoneInstrumentation.TagParallelism(activity, snapshot.MaxDegreeOfParallelism);
             Stopwatch stopwatch = Stopwatch.StartNew();
             SummaryBuilder total = new SummaryBuilder();
 
@@ -231,6 +233,7 @@ namespace Touchstone.Core
             if (selection.Cases.Count == 0) return counts.Build();
 
             Activity? activity = TouchstoneInstrumentation.StartSuite(suite);
+            TouchstoneInstrumentation.TagParallelism(activity, options.MaxDegreeOfParallelism);
             Stopwatch stopwatch = Stopwatch.StartNew();
             List<SuiteLifecycleError> lifecycleErrors = new List<SuiteLifecycleError>();
             Exception? setupError = null;
@@ -267,32 +270,10 @@ namespace Touchstone.Core
                         }
                     }
 
-                    foreach (TestCaseDescriptor testCase in selection.Cases)
-                    {
-                        if (!state.Halted && cancellationToken.IsCancellationRequested) state.Canceled = true;
-
-                        TestResult result;
-                        if (state.Canceled)
-                            result = NotRunResult(testCase, MessageCanceled);
-                        else if (state.Stopped)
-                            result = NotRunResult(testCase, MessageStopped);
-                        else if (setupError != null && !(testCase.IsSkipped && options.SkipBehavior == SkipBehavior.Report))
-                            result = SetupFailedResult(testCase, setupError);
-                        else
-                            result = await RunCaseCoreAsync(testCase, sink, options, cancellationToken).ConfigureAwait(false);
-
-                        if (result.Outcome == TestOutcome.Canceled) state.Canceled = true;
-                        if (result.Outcome == TestOutcome.Failed && options.StopOnFirstFailure) state.Stopped = true;
-                        if (result.Outcome == TestOutcome.NotRun) TouchstoneInstrumentation.RecordNotRun(suite.SuiteId);
-
-                        counts.Count(result.Outcome);
-
-                        if (sink != null)
-                        {
-                            await InvokeSinkAsync(suite.SuiteId, TouchstoneTelemetry.EventCaseCompleted,
-                                () => sink.OnCaseCompletedAsync(result, CancellationToken.None)).ConfigureAwait(false);
-                        }
-                    }
+                    if (options.MaxDegreeOfParallelism > 1 && selection.Cases.Count > 1)
+                        await RunCasesInParallelAsync(suite, selection, sink, options, state, setupError, counts, cancellationToken).ConfigureAwait(false);
+                    else
+                        await RunCasesInOrderAsync(suite, selection, sink, options, state, setupError, counts, cancellationToken).ConfigureAwait(false);
                 }
                 finally
                 {
@@ -328,6 +309,159 @@ namespace Touchstone.Core
                 TouchstoneInstrumentation.CompleteSuite(activity, suite.SuiteId, counts.Build(), stopwatch.Elapsed, ex);
                 throw;
             }
+        }
+
+        private static async Task RunCasesInOrderAsync(
+            TestSuiteDescriptor suite,
+            Selection selection,
+            ITestResultSink? sink,
+            TestRunOptions options,
+            RunState state,
+            Exception? setupError,
+            SummaryBuilder counts,
+            CancellationToken cancellationToken)
+        {
+            foreach (TestCaseDescriptor testCase in selection.Cases)
+            {
+                if (!state.Halted && cancellationToken.IsCancellationRequested) state.Canceled = true;
+
+                TestResult? result = PlannedResult(testCase, options, state, setupError);
+                if (result == null)
+                    result = await RunCaseCoreAsync(testCase, sink, options, cancellationToken).ConfigureAwait(false);
+
+                RecordOutcome(suite.SuiteId, result, options, state, counts);
+
+                if (sink != null)
+                {
+                    await InvokeSinkAsync(suite.SuiteId, TouchstoneTelemetry.EventCaseCompleted,
+                        () => sink.OnCaseCompletedAsync(result, CancellationToken.None)).ConfigureAwait(false);
+                }
+            }
+        }
+
+        private static async Task RunCasesInParallelAsync(
+            TestSuiteDescriptor suite,
+            Selection selection,
+            ITestResultSink? sink,
+            TestRunOptions options,
+            RunState state,
+            Exception? setupError,
+            SummaryBuilder counts,
+            CancellationToken cancellationToken)
+        {
+            // Cases start in declaration order, at most MaxDegreeOfParallelism at a time. Run state and counts change
+            // under one lock, and sink callbacks go through a gate so they are never concurrent. The first exception
+            // that escapes a case (a sink failure) stops new cases from starting; running cases finish, then it is
+            // rethrown, as it would be in a sequential run.
+            object sync = new object();
+            List<Task> running = new List<Task>();
+            ExceptionDispatchInfo? fault = null;
+
+            using (SerializedSink? gate = sink == null ? null : new SerializedSink(sink))
+            using (SemaphoreSlim slots = new SemaphoreSlim(options.MaxDegreeOfParallelism, options.MaxDegreeOfParallelism))
+            {
+                foreach (TestCaseDescriptor testCase in selection.Cases)
+                {
+                    // Waiting for a slot does not observe cancellation: every case still gets a result.
+                    await slots.WaitAsync().ConfigureAwait(false);
+
+                    TestResult? planned;
+                    lock (sync)
+                    {
+                        if (fault != null)
+                        {
+                            slots.Release();
+                            break;
+                        }
+
+                        if (!state.Halted && cancellationToken.IsCancellationRequested) state.Canceled = true;
+                        planned = PlannedResult(testCase, options, state, setupError);
+                    }
+
+                    if (planned != null)
+                    {
+                        try
+                        {
+                            await CompleteParallelCaseAsync(suite.SuiteId, planned, gate, options, state, counts, sync).ConfigureAwait(false);
+                        }
+                        catch (Exception ex)
+                        {
+                            lock (sync)
+                            {
+                                if (fault == null) fault = ExceptionDispatchInfo.Capture(ex);
+                            }
+                        }
+                        finally
+                        {
+                            slots.Release();
+                        }
+
+                        continue;
+                    }
+
+                    running.Add(Task.Run(async () =>
+                    {
+                        try
+                        {
+                            TestResult result = await RunCaseCoreAsync(testCase, gate, options, cancellationToken).ConfigureAwait(false);
+                            await CompleteParallelCaseAsync(suite.SuiteId, result, gate, options, state, counts, sync).ConfigureAwait(false);
+                        }
+                        catch (Exception ex)
+                        {
+                            lock (sync)
+                            {
+                                if (fault == null) fault = ExceptionDispatchInfo.Capture(ex);
+                            }
+                        }
+                        finally
+                        {
+                            slots.Release();
+                        }
+                    }));
+                }
+
+                await Task.WhenAll(running).ConfigureAwait(false);
+            }
+
+            fault?.Throw();
+        }
+
+        private static async Task CompleteParallelCaseAsync(
+            string suiteId,
+            TestResult result,
+            ITestResultSink? gate,
+            TestRunOptions options,
+            RunState state,
+            SummaryBuilder counts,
+            object sync)
+        {
+            lock (sync)
+            {
+                RecordOutcome(suiteId, result, options, state, counts);
+            }
+
+            if (gate != null)
+            {
+                await InvokeSinkAsync(suiteId, TouchstoneTelemetry.EventCaseCompleted,
+                    () => gate.OnCaseCompletedAsync(result, CancellationToken.None)).ConfigureAwait(false);
+            }
+        }
+
+        private static TestResult? PlannedResult(TestCaseDescriptor testCase, TestRunOptions options, RunState state, Exception? setupError)
+        {
+            if (state.Canceled) return NotRunResult(testCase, MessageCanceled);
+            if (state.Stopped) return NotRunResult(testCase, MessageStopped);
+            if (setupError != null && !(testCase.IsSkipped && options.SkipBehavior == SkipBehavior.Report))
+                return SetupFailedResult(testCase, setupError);
+            return null;
+        }
+
+        private static void RecordOutcome(string suiteId, TestResult result, TestRunOptions options, RunState state, SummaryBuilder counts)
+        {
+            if (result.Outcome == TestOutcome.Canceled) state.Canceled = true;
+            if (result.Outcome == TestOutcome.Failed && options.StopOnFirstFailure) state.Stopped = true;
+            if (result.Outcome == TestOutcome.NotRun) TouchstoneInstrumentation.RecordNotRun(suiteId);
+            counts.Count(result.Outcome);
         }
 
         private static async Task<Exception?> RunTeardownAsync(
@@ -394,13 +528,7 @@ namespace Touchstone.Core
                     }
                 }
 
-                if (testCase.Scenario != null)
-                {
-                    result = await testCase.Scenario.ExecuteAsync(testCase, sink, cancellationToken).ConfigureAwait(false);
-                    return result;
-                }
-
-                result = await RunBodyAsync(testCase, cancellationToken, stopwatch).ConfigureAwait(false);
+                result = await RunActiveAsync(testCase, sink, options, cancellationToken, stopwatch, activity).ConfigureAwait(false);
                 return result;
             }
             catch (Exception ex)
@@ -417,19 +545,58 @@ namespace Touchstone.Core
             }
         }
 
-        private static async Task<TestResult> RunBodyAsync(TestCaseDescriptor testCase, CancellationToken cancellationToken, Stopwatch stopwatch)
+        private static async Task<TestResult> RunActiveAsync(
+            TestCaseDescriptor testCase,
+            ITestResultSink? sink,
+            TestRunOptions options,
+            CancellationToken cancellationToken,
+            Stopwatch stopwatch,
+            Activity? activity)
         {
+            if (!options.CaseTimeout.HasValue)
+            {
+                if (testCase.Scenario != null)
+                    return await testCase.Scenario.ExecuteAsync(testCase, sink, cancellationToken, null).ConfigureAwait(false);
+                return await RunBodyAsync(testCase, cancellationToken, null, stopwatch).ConfigureAwait(false);
+            }
+
+            using (CaseDeadline deadline = new CaseDeadline(options.CaseTimeout.Value, cancellationToken))
+            {
+                TestResult result = testCase.Scenario != null
+                    ? await testCase.Scenario.ExecuteAsync(testCase, sink, cancellationToken, deadline).ConfigureAwait(false)
+                    : await RunBodyAsync(testCase, cancellationToken, deadline, stopwatch).ConfigureAwait(false);
+
+                // Caller cancellation wins over a timeout, and only a case that passed or failed can have timed out.
+                if (!deadline.Expired || cancellationToken.IsCancellationRequested) return result;
+                if (result.Outcome != TestOutcome.Passed && result.Outcome != TestOutcome.Failed) return result;
+
+                CaseTimeoutException error = new CaseTimeoutException(testCase.TestId, deadline.Timeout, result.Exception);
+                TouchstoneInstrumentation.RecordTimeout(activity, testCase.SuiteId);
+                return new TestResult(result.SuiteId, result.CaseId, result.DisplayName, TestOutcome.Failed, result.Duration,
+                    error.Message, error, result.Tags, result.Metadata, result.Steps, result.CleanupExceptions);
+            }
+        }
+
+        private static async Task<TestResult> RunBodyAsync(
+            TestCaseDescriptor testCase,
+            CancellationToken cancellationToken,
+            CaseDeadline? deadline,
+            Stopwatch stopwatch)
+        {
+            CancellationToken caseToken = deadline != null ? deadline.Token : cancellationToken;
             try
             {
-                Task? task = testCase.Body!(cancellationToken);
+                Task? task = testCase.Body!(caseToken);
                 if (task == null) throw new InvalidOperationException("The execution delegate of " + testCase.TestId + " returned a null task.");
                 await task.ConfigureAwait(false);
+                deadline?.Stop();
                 stopwatch.Stop();
                 return new TestResult(testCase.SuiteId, testCase.CaseId, testCase.DisplayName, TestOutcome.Passed,
                     stopwatch.Elapsed, null, null, testCase.Tags);
             }
             catch (Exception ex)
             {
+                deadline?.Stop();
                 stopwatch.Stop();
                 TestOutcome outcome = IsCallerCancellation(ex, cancellationToken) ? TestOutcome.Canceled : TestOutcome.Failed;
                 return new TestResult(testCase.SuiteId, testCase.CaseId, testCase.DisplayName, outcome,

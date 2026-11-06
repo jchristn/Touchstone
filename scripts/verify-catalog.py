@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Check Touchstone test results against the test catalog in archive/V1.0_PLAN.md section 11.
+"""Check Touchstone test results against the test catalogs in archive/V1.0_PLAN.md section 11 and archive/V1.1_PLAN.md section 5.
 
 Usage:
-  python3 scripts/verify-catalog.py [--plan PATH] [--update-plan] [--require-all] [--trx DIR] results.json [...]
+  python3 scripts/verify-catalog.py [--plan PATH ...] [--update-plan] [--require-all] [--trx DIR] results.json [...]
+
+With no --plan, both catalogs are read. Repeat --plan to read a specific set.
 
 Each results file is JSON written by ConsoleRunner --results (schema 1.0) or by the verification scripts. With
 --trx, every .trx file under DIR (written by `dotnet test --logger trx`) is read as well; a native test matches the
@@ -28,13 +30,19 @@ def adapter_row(row):
     return (row.startswith("ADP-") and row != "ADP-25") or row in ("DUP-08", "TEL-12", "CAN-22")
 
 
-def load_catalog(path):
+DEFAULT_PLANS = ["archive/V1.0_PLAN.md", "archive/V1.1_PLAN.md"]
+
+
+def load_catalog(paths):
     rows = {}
-    with open(path, encoding="utf-8") as handle:
-        for line in handle:
-            match = ROW.match(line.rstrip("\n"))
-            if match:
-                rows[match.group(1)] = match.group(3)
+    for path in paths:
+        with open(path, encoding="utf-8") as handle:
+            for line in handle:
+                match = ROW.match(line.rstrip("\n"))
+                if match:
+                    if match.group(1) in rows:
+                        raise SystemExit("Catalog ID " + match.group(1) + " appears more than once (" + path + ")")
+                    rows[match.group(1)] = match.group(3)
     return rows
 
 
@@ -51,14 +59,15 @@ def catalog_id(case_id, rows):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--plan", default="archive/V1.0_PLAN.md")
+    parser.add_argument("--plan", action="append", default=None)
     parser.add_argument("--update-plan", action="store_true")
     parser.add_argument("--require-all", action="store_true")
     parser.add_argument("--trx", action="append", default=[])
     parser.add_argument("results", nargs="*")
     args = parser.parse_args()
 
-    rows = load_catalog(args.plan)
+    plans = args.plan or DEFAULT_PLANS
+    rows = load_catalog(plans)
     passed, failed, unknown = set(), {}, set()
     variants = {}
     entries = []
@@ -110,14 +119,15 @@ def main():
                     problems += 1
 
     if args.update_plan:
-        with open(args.plan, encoding="utf-8") as handle:
-            lines = handle.read().split("\n")
-        for index, line in enumerate(lines):
-            match = ROW.match(line)
-            if match and match.group(3) == "planned" and match.group(1) in passed and match.group(1) not in failed:
-                lines[index] = line[: line.rfind("| planned |")] + "| done |"
-        with open(args.plan, "w", encoding="utf-8") as handle:
-            handle.write("\n".join(lines))
+        for plan in plans:
+            with open(plan, encoding="utf-8") as handle:
+                lines = handle.read().split("\n")
+            for index, line in enumerate(lines):
+                match = ROW.match(line)
+                if match and match.group(3) == "planned" and match.group(1) in passed and match.group(1) not in failed:
+                    lines[index] = line[: line.rfind("| planned |")] + "| done |"
+            with open(plan, "w", encoding="utf-8") as handle:
+                handle.write("\n".join(lines))
 
     covered = len([r for r in rows if r in passed])
     print("Catalog rows: " + str(len(rows)) + ", covered by passing cases: " + str(covered) + ", problems: " + str(problems))

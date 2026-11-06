@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Documentation, sample, style, and benchmark checks (catalog rows DOC-01 to DOC-06, TEL-22, SAMPLE-01 to SAMPLE-03,
+"""Documentation, sample, style, and benchmark checks (catalog rows DOC-01 to DOC-06, TEL-22, SAMPLE-01 to SAMPLE-04,
 PKG-07, BENCH-01 to BENCH-03).
 
 Usage: python3 scripts/verify-docs.py [--results PATH] [--skip-slow]
@@ -182,6 +182,17 @@ def main():
     sample_files = tracked(["test/Touchstone.SampleApp.Tests.*", "src/Touchstone.SampleApp/*"])
     localhost = [p for p in sample_files if os.path.isfile(os.path.join(ROOT, p)) and "localhost" in open(os.path.join(ROOT, p), encoding="utf-8", errors="replace").read()]
     record("SAMPLE-03", not localhost, "sample clients use 127.0.0.1" + (": localhost in " + ", ".join(localhost) if localhost else ""))
+    shared = os.path.join(ROOT, "test", "Touchstone.SampleApp.Tests.Shared")
+    shared_sources = {name: open(os.path.join(shared, name), encoding="utf-8").read() for name in sorted(os.listdir(shared)) if name.endswith(".cs")}
+    hooks = [n for n, text in shared_sources.items() if "beforeSuiteAsync" in text or "afterSuiteAsync" in text]
+    factories = [n for n, text in shared_sources.items() if "WebApplicationFactory" in text and n != "SampleApiHost.cs"]
+    host = shared_sources.get("SampleApiHost.cs", "")
+    reload_off = 'UseSetting("hostBuilder:reloadConfigOnChange", "false")' in host
+    record("SAMPLE-04", not hooks and not factories and reload_off,
+           "sample suites own no servers at build time and use no suite hooks; SampleApiHost disables config reload"
+           + (": hooks in " + ", ".join(hooks) if hooks else "")
+           + (": WebApplicationFactory outside SampleApiHost in " + ", ".join(factories) if factories else "")
+           + ("" if reload_off else ": reload not disabled"))
     if not args.skip_slow:
         sample = ["dotnet", "run", "--project", "test/Touchstone.SampleApp.Tests.Console", "-c", "Release", "--no-build", "--", "--no-color"]
         full = run(sample)

@@ -25,7 +25,7 @@ namespace Touchstone.Xunit3Adapter
         /// Under <see cref="SkipBehavior.Omit"/>, skipped cases get no row; under <see cref="SkipBehavior.Fail"/>, their row fails.
         /// </summary>
         /// <typeparam name="TProvider">Suite provider with a public parameterless constructor.</typeparam>
-        /// <param name="options">Filter and skip behavior. Null uses the defaults.</param>
+        /// <param name="options">Filter, skip behavior, and case timeout. Each row carries the skip behavior and case timeout and applies them when it runs. Other settings, including MaxDegreeOfParallelism, are ignored: use the framework's own parallelization. Null uses the defaults.</param>
         /// <returns>Theory data, in suite and case order.</returns>
         /// <exception cref="ArgumentException">The provider's suites contain null, or the filter contains an invalid value.</exception>
         /// <exception cref="DuplicateTestIdException">Two suites share an identity.</exception>
@@ -43,7 +43,7 @@ namespace Touchstone.Xunit3Adapter
                 if (testCase.IsSkipped && settings.SkipBehavior == SkipBehavior.Omit) continue;
 
                 TheoryDataRow<TouchstoneXunit3Case> row = new TheoryDataRow<TouchstoneXunit3Case>(
-                    new TouchstoneXunit3Case(typeof(TProvider), testCase, settings.SkipBehavior));
+                    new TouchstoneXunit3Case(typeof(TProvider), testCase, settings.SkipBehavior, settings.CaseTimeout));
                 row = row.WithTestDisplayName(testCase.DisplayName);
                 foreach (string tag in testCase.Tags) row = row.WithTrait(TagTraitName, tag);
                 if (testCase.IsSkipped && settings.SkipBehavior == SkipBehavior.Report) row = row.WithSkip(testCase.SkipReason);

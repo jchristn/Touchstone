@@ -4,7 +4,7 @@
 
 Runner-agnostic test descriptor framework for .NET.
 
-v1.0.0
+v1.1.0
 
 ## What is Touchstone?
 
@@ -20,6 +20,7 @@ A test is a `TestCaseDescriptor`: an identity, a display name, optional tags and
 - **Readable behavior scenarios.** Given/When/Then/And steps with a fresh context per execution, guaranteed cleanup, step-level results, and typed examples. See [BDD.md](BDD.md).
 - **Filtering.** Select cases by tag, suite, or test identity from code, the command line, or native framework filters.
 - **Predictable cancellation.** A canceled run stops cleanly, runs teardown, and reports what did not run.
+- **Timeouts and parallelism.** Give every case a time limit, and run the cases of a suite concurrently when they are safe to, without changing how suites, hooks, or results behave.
 - **Reports.** Tabular console output, JSON results with a published schema, and a self-contained offline HTML report.
 - **Observability.** OpenTelemetry-shaped metrics and traces through the BCL `Meter` and `ActivitySource`, with no exporter dependency. See [TELEMETRY.md](TELEMETRY.md).
 - **No lock-in.** Touchstone.Core has no third-party dependencies.
@@ -210,6 +211,7 @@ dotnet run                                  # run everything
 dotnet run -- --tag fast                    # only cases tagged fast
 dotnet run -- --exclude-tag slow --expand   # skip slow cases, show scenario steps live
 dotnet run -- --skip fail                   # treat skipped cases as failures
+dotnet run -- --parallel 4 --case-timeout 30  # four cases at a time, 30 seconds each
 dotnet run -- --results results.json --html report.html
 dotnet run -- --help
 ```
@@ -222,6 +224,8 @@ dotnet run -- --help
 | `--test <ids>` | Run only these test identities (`SuiteId.CaseId`). |
 | `--skip report\|omit\|fail` | How to treat skipped cases. Default `report`. |
 | `--stop-on-failure` | Stop at the first failed case; the rest are reported as not run. |
+| `--case-timeout <seconds>` | Fail any case that runs longer than this. From 0.001 to 86400. Default: no timeout. |
+| `--parallel <n>` | Run up to n cases of a suite at the same time. From 1 to 1024. Default 1. |
 | `--results <path>` | Write JSON results. |
 | `--html <path>` | Write an offline HTML report. |
 | `--expand` | Show scenario steps as they run. |
@@ -422,7 +426,7 @@ Suite hooks (`beforeSuiteAsync` and `afterSuiteAsync`) run in the console runner
 | Outcome | Meaning |
 |---|---|
 | Passed | The case ran without an exception. |
-| Failed | The case threw, its suite setup failed, its scenario cleanup failed, or it was skipped under `SkipBehavior.Fail`. |
+| Failed | The case threw, exceeded `CaseTimeout`, its suite setup failed, its scenario cleanup failed, or it was skipped under `SkipBehavior.Fail`. |
 | Skipped | The case has a skip reason and did not run. |
 | Canceled | The case observed caller cancellation. |
 | NotRun | The case was selected but never started, because the run was canceled or stopped on a failure. |
@@ -468,9 +472,43 @@ namespace MyTests.Console
 
 ## Cancellation
 
-When the caller cancels a run, the case in progress finishes or observes the cancellation (and is reported as Canceled), the current suite's teardown runs, and every remaining selected case is reported as NotRun. `TestExecutor.RunAsync` returns normally with `TestRunSummary.WasCanceled` set; it does not throw. Teardown gets its own token, which is canceled only after `TestRunOptions.CleanupTimeout` (default 30 seconds) once the caller cancels. Single-case entry points that throw (`ExecuteCaseAsync`, the adapter helpers, and the run-all base classes) throw `OperationCanceledException`.
+When the caller cancels a run, each case in progress finishes or observes the cancellation (and is reported as Canceled), the current suite's teardown runs, and every remaining selected case is reported as NotRun. `TestExecutor.RunAsync` returns normally with `TestRunSummary.WasCanceled` set; it does not throw. Teardown gets its own token, which is canceled only after `TestRunOptions.CleanupTimeout` (default 30 seconds) once the caller cancels. Single-case entry points that throw (`ExecuteCaseAsync`, the adapter helpers, and the run-all base classes) throw `OperationCanceledException`.
 
 A case counts as Canceled when it throws `OperationCanceledException` while the caller's token is canceled. The same exception with an uncanceled caller token (for example an internal timeout) is a failure.
+
+## Timeouts and parallel execution
+
+Both settings live on `TestRunOptions`, are off by default, and apply to the console runner and the run-all base classes as well as `TestExecutor`.
+
+```csharp
+namespace MyTests.Console
+{
+    using System;
+    using System.Threading.Tasks;
+
+    using MyTests;
+    using Touchstone.Core;
+
+    internal static class FastRun
+    {
+        internal static async Task<TestRunSummary> RunAsync()
+        {
+            TestRunOptions options = new TestRunOptions
+            {
+                CaseTimeout = TimeSpan.FromSeconds(30),
+                MaxDegreeOfParallelism = 4,
+            };
+            return await TestExecutor.RunAsync(ShoppingCartSuites.All, null, options).ConfigureAwait(false);
+        }
+    }
+}
+```
+
+`CaseTimeout` limits how long one case may run. The clock covers the case body, or a scenario's context creation and steps; scenario cleanup, suite hooks, and sink callbacks have their own budgets. When the time is up, the case's cancellation token is canceled. A case that is still running at that point is reported as Failed with a `CaseTimeoutException`, which names the case and the limit and wraps whatever the case threw. Caller cancellation still wins and reports Canceled. The timeout is cooperative: Touchstone waits for the case to return before starting the next one, so a case that ignores its token is reported as timed out when it finishes rather than abandoned while it keeps running. In a scenario, the step that was running is Failed, later steps do not run, and cleanup runs as usual.
+
+`MaxDegreeOfParallelism` runs up to that many cases of a suite at once. Suites still run one after another, and each suite's setup runs before its first case and its teardown after its last, so hooks never overlap. Cases start in declaration order and their results reach sinks in the order they finish. Sink callbacks are never concurrent, so a sink written for sequential runs keeps working. With `StopOnFirstFailure`, or when the caller cancels, cases already running finish and cases not yet started are reported as NotRun. Raise the limit only for cases that do not share mutable state; scenarios are a good fit because every execution gets its own context.
+
+The framework adapters carry `CaseTimeout` into each row, so pass the options to the data source (or, for NUnit, to `TouchstoneNunit.ExecuteAsync`). One-row-per-case hosts ignore `MaxDegreeOfParallelism` and use the framework's own parallelization instead.
 
 ## Results and reports
 
@@ -501,12 +539,14 @@ Test.Aot runs every suite in `Test.Shared` except the reflection-based API conve
 
 - Not an assertion library. Throw any exception to fail a case, or use the assertions you already have.
 - Not a reflection-based discovery framework. Suites are plain objects you construct.
-- Not a parallel runner. Cases run in order within a run; framework hosts may run test classes in parallel as they normally do.
+- Not a distributed runner. Parallel execution stays inside one process and one suite at a time.
 - Not a Gherkin parser. Scenarios are written in C#.
 
 ## Sample app
 
-`src/Touchstone.SampleApp` is a small Notes API. `test/Touchstone.SampleApp.Tests.*` run the same shared suites (direct HTTP checks and behavior scenarios) through the console and all four frameworks:
+`src/Touchstone.SampleApp` is a small Notes API. `test/Touchstone.SampleApp.Tests.*` run the same shared suites (direct HTTP checks and behavior scenarios) through the console and all four frameworks. Every case and scenario starts its own in-process server through `SampleApiHost` and disposes it, so cases share nothing and the suites hold no resources between cases. That matters for one-row-per-case hosts, which never run suite hooks.
+
+If you test an ASP.NET Core app with `WebApplicationFactory`, consider the setting `SampleApiHost` uses: `builder.UseSetting("hostBuilder:reloadConfigOnChange", "false")`. Without it, each host watches its content root for configuration changes, and on some platforms setting up that watcher delays start-up by several seconds. With it, the sample servers start in about a millisecond.
 
 ```bash
 dotnet run --project test/Touchstone.SampleApp.Tests.Console
@@ -520,7 +560,7 @@ dotnet test test/Touchstone.SampleApp.Tests.Mstest
 
 ## Testing Touchstone
 
-Touchstone tests itself with its own descriptors. Every case identity is a row in the test catalog ([archive/V1.0_PLAN.md](archive/V1.0_PLAN.md), section 11), and `scripts/verify-catalog.py` fails CI when a catalog row has no passing case.
+Touchstone tests itself with its own descriptors. Every case identity is a row in the test catalog ([archive/V1.0_PLAN.md](archive/V1.0_PLAN.md), section 11, extended by [archive/V1.1_PLAN.md](archive/V1.1_PLAN.md), section 5), and `scripts/verify-catalog.py` fails CI when a catalog row has no passing case.
 
 | Project or script | Purpose |
 |---|---|

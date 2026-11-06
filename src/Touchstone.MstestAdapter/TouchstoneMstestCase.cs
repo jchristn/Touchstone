@@ -29,13 +29,17 @@ namespace Touchstone.MstestAdapter
         [DataMember(Name = "skipBehavior")]
         private int _SkipBehavior = 0;
 
-        internal TouchstoneMstestCase(Type providerType, TestCaseDescriptor testCase, SkipBehavior skipBehavior)
+        [DataMember(Name = "caseTimeoutTicks")]
+        private long _CaseTimeoutTicks = 0;
+
+        internal TouchstoneMstestCase(Type providerType, TestCaseDescriptor testCase, SkipBehavior skipBehavior, TimeSpan? caseTimeout)
         {
             _ProviderType = providerType.AssemblyQualifiedName ?? providerType.FullName ?? providerType.Name;
             _TestId = testCase.TestId;
             _DisplayName = testCase.DisplayName;
             _SkipReason = testCase.SkipReason;
             _SkipBehavior = (int)skipBehavior;
+            _CaseTimeoutTicks = caseTimeout.HasValue ? caseTimeout.Value.Ticks : 0;
         }
 
         /// <summary>
@@ -70,6 +74,11 @@ namespace Touchstone.MstestAdapter
         internal SkipBehavior SkipBehavior
         {
             get { return (SkipBehavior)_SkipBehavior; }
+        }
+
+        internal TimeSpan? CaseTimeout
+        {
+            get { return _CaseTimeoutTicks > 0 ? TimeSpan.FromTicks(_CaseTimeoutTicks) : null; }
         }
 
         /// <summary>

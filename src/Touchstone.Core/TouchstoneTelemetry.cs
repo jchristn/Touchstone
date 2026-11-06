@@ -94,6 +94,12 @@ namespace Touchstone.Core
         public const string SinkEvents = "touchstone.sink.events";
 
         /// <summary>
+        /// Counter of cases that exceeded <see cref="TestRunOptions.CaseTimeout"/>, labeled by suite (when enabled).
+        /// Each is also counted in <see cref="Cases"/> with outcome failed.
+        /// </summary>
+        public const string CaseTimeouts = "touchstone.case.timeouts";
+
+        /// <summary>
         /// Counter of failures, labeled by stage, error.type, and (when enabled) suite.
         /// </summary>
         public const string Errors = "touchstone.errors";
@@ -247,6 +253,16 @@ namespace Touchstone.Core
         /// Span attribute: skip reason of a skipped case.
         /// </summary>
         public const string AttributeSkipReason = "touchstone.case.skip_reason";
+
+        /// <summary>
+        /// Case span attribute set to true when the case exceeded <see cref="TestRunOptions.CaseTimeout"/>.
+        /// </summary>
+        public const string AttributeCaseTimedOut = "touchstone.case.timed_out";
+
+        /// <summary>
+        /// Run and suite span attribute: the <see cref="TestRunOptions.MaxDegreeOfParallelism"/> the run used.
+        /// </summary>
+        public const string AttributeMaxDegreeOfParallelism = "touchstone.max_degree_of_parallelism";
 
         /// <summary>
         /// Span attribute: scenario step kind (given, when, then).

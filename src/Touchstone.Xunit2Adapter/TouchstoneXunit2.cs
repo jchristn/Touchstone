@@ -32,7 +32,7 @@ namespace Touchstone.Xunit2Adapter
             if (testCase == null) throw new ArgumentNullException(nameof(testCase));
 
             TestCaseDescriptor descriptor = CaseIndex.Resolve(CaseIndex.ProviderType(testCase.ProviderType), testCase.TestId);
-            TestRunOptions options = new TestRunOptions { SkipBehavior = testCase.SkipBehavior };
+            TestRunOptions options = new TestRunOptions { SkipBehavior = testCase.SkipBehavior, CaseTimeout = testCase.CaseTimeout };
             return RunAsync(descriptor, options, output, cancellationToken);
         }
 

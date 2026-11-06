@@ -7,10 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v1.1.0] - 2026-11-05
+
+A minor release. Every change is additive, and the defaults keep the 1.0 behavior.
+
+### Added
+
+- `TestRunOptions.CaseTimeout` limits how long one case may run. A case still running when the time is up has its token canceled and is reported as Failed with the new `CaseTimeoutException` (a `TimeoutException` carrying the test identity, the limit, and the case's own exception). The clock covers the case body or a scenario's context creation and steps, not scenario cleanup, suite hooks, or sink callbacks. Caller cancellation still reports Canceled.
+- `TestRunOptions.MaxDegreeOfParallelism` (default 1, up to 1024) runs that many cases of a suite at once. Suites and their hooks stay sequential, sink callbacks are serialized, and `StopOnFirstFailure` and cancellation report cases that have not started as NotRun.
+- Console runner options `--case-timeout <seconds>` and `--parallel <n>`.
+- The xUnit v2, xUnit v3, and MSTest row keys carry `CaseTimeout`, so a timeout set on the options given to the data source applies to every row.
+- Telemetry: the `touchstone.case.timeouts` counter, the `touchstone.case.timed_out` case span attribute, and the `touchstone.max_degree_of_parallelism` run and suite span attribute. See TELEMETRY.md, "Changes in 1.1".
+- archive/V1.1_PLAN.md, with 27 new test catalog rows. `scripts/verify-catalog.py` reads both catalogs.
+
 ### Changed
 
 - Package validation compares every shipping package against the published 1.0.0 packages, so a breaking change fails the pack.
 - The macOS benchmark baseline is re-recorded with .NET SDK 10.0.403.
+- The README documents timeouts and parallel execution, and TELEMETRY.md no longer says cases always run sequentially.
+- IMPROVEMENTS.md moved to archive/ once its remaining items were done or dropped.
+
+### Fixed
+
+- The sample suites created `WebApplicationFactory` servers while the suites were being built and disposed them only in `afterSuiteAsync`, which one-row-per-case hosts never run. Each sample case and scenario now owns its server through `SampleApiHost` and disposes it.
+- The sample hosts took up to 44 seconds on macOS because every `WebApplicationFactory` host watched its content root for configuration changes, and setting up that watcher stalled start-up for seconds at a time. `SampleApiHost` turns configuration reload off, and each sample host now finishes in well under a second.
+
+### Removed
+
+- DOCKERHUB_README.md. Touchstone ships NuGet packages and has no Docker image.
 
 ## [v1.0.0] - 2026-11-05
 

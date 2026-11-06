@@ -18,6 +18,7 @@ namespace Touchstone.Xunit2Adapter
         private string _DisplayName = string.Empty;
         private string? _SkipReason = null;
         private SkipBehavior _SkipBehavior = SkipBehavior.Report;
+        private long _CaseTimeoutTicks = 0;
 
         /// <summary>
         /// Initialize an empty key. Used by xUnit deserialization; not for direct use.
@@ -27,13 +28,14 @@ namespace Touchstone.Xunit2Adapter
         {
         }
 
-        internal TouchstoneXunit2Case(Type providerType, TestCaseDescriptor testCase, SkipBehavior skipBehavior)
+        internal TouchstoneXunit2Case(Type providerType, TestCaseDescriptor testCase, SkipBehavior skipBehavior, TimeSpan? caseTimeout)
         {
             _ProviderType = providerType.AssemblyQualifiedName ?? providerType.FullName ?? providerType.Name;
             _TestId = testCase.TestId;
             _DisplayName = testCase.DisplayName;
             _SkipReason = testCase.SkipReason;
             _SkipBehavior = skipBehavior;
+            _CaseTimeoutTicks = caseTimeout.HasValue ? caseTimeout.Value.Ticks : 0;
         }
 
         /// <summary>
@@ -70,6 +72,11 @@ namespace Touchstone.Xunit2Adapter
             get { return _SkipBehavior; }
         }
 
+        internal TimeSpan? CaseTimeout
+        {
+            get { return _CaseTimeoutTicks > 0 ? TimeSpan.FromTicks(_CaseTimeoutTicks) : null; }
+        }
+
         /// <inheritdoc />
         public void Deserialize(IXunitSerializationInfo info)
         {
@@ -79,6 +86,7 @@ namespace Touchstone.Xunit2Adapter
             _DisplayName = info.GetValue<string>("displayName") ?? string.Empty;
             _SkipReason = info.GetValue<string>("skipReason");
             _SkipBehavior = (SkipBehavior)info.GetValue<int>("skipBehavior");
+            _CaseTimeoutTicks = info.GetValue<long>("caseTimeoutTicks");
         }
 
         /// <inheritdoc />
@@ -90,6 +98,7 @@ namespace Touchstone.Xunit2Adapter
             info.AddValue("displayName", _DisplayName);
             info.AddValue("skipReason", _SkipReason);
             info.AddValue("skipBehavior", (int)_SkipBehavior);
+            info.AddValue("caseTimeoutTicks", _CaseTimeoutTicks);
         }
 
         /// <summary>

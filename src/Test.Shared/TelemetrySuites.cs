@@ -405,6 +405,9 @@ namespace Test.Shared
                                 Fixtures.Suite(id + "c", Fixtures.Passing(id + "c", "Off", null, new[] { "off" }), Fixtures.CancelsRun(id + "c", "Stop", source), Fixtures.Passing(id + "c", "Never")),
                             }, o => { o.Run = options; o.JsonResultsPath = path; o.HtmlReportPath = path + ".html"; o.AdditionalSinks.Add(new RecordingSink()); }, source.Token);
 
+                            TestRunOptions timed = new TestRunOptions { CaseTimeout = TimeSpan.FromMilliseconds(50), MaxDegreeOfParallelism = 2 };
+                            await TestExecutor.RunSuiteAsync(Fixtures.Suite(id + "d", new TestCaseDescriptor(id + "d", "Hang", "Hang", t => Task.Delay(Timeout.Infinite, t)), Fixtures.Passing(id + "d", "A")), null, timed, ct);
+
                             foreach (Activity span in capture.Spans())
                             {
                                 seen.Add(span.DisplayName);
@@ -493,6 +496,42 @@ namespace Test.Shared
                         List<CapturedMeasurement> errors = capture.Measurements(TouchstoneTelemetry.Errors);
                         TestAssert.Equal(1, errors.Count(e => e.Tag(TouchstoneTelemetry.LabelStage) == TouchstoneTelemetry.StageBeforeSuite), "before");
                         TestAssert.Equal(typeof(FormatException).FullName, errors.Single(e => e.Tag(TouchstoneTelemetry.LabelStage) == TouchstoneTelemetry.StageAfterSuite).Tag(TouchstoneTelemetry.LabelErrorType), "after");
+                    }
+                }),
+                Guarded(S, "TEL-23", "A timed-out case records touchstone.case.timeouts, a failed case, its error type, and the span attribute", async ct =>
+                {
+                    string id = UniqueSuiteId();
+                    using (TelemetryCapture capture = new TelemetryCapture())
+                    {
+                        TestRunOptions options = new TestRunOptions { CaseTimeout = TimeSpan.FromMilliseconds(100) };
+                        TestSuiteDescriptor suite = Fixtures.Suite(id, new TestCaseDescriptor(id, "Hang", "Hang", t => Task.Delay(Timeout.Infinite, t)), Fixtures.Passing(id, "A"));
+                        await TestExecutor.RunSuiteAsync(suite, null, options, ct);
+                        TestAssert.Equal(1, capture.Measurements(TouchstoneTelemetry.CaseTimeouts).Count, "timeout counter");
+                        TestAssert.Equal(id, capture.Measurements(TouchstoneTelemetry.CaseTimeouts).Single().Tag(TouchstoneTelemetry.LabelSuite), "suite label");
+                        TestAssert.Equal(1, capture.Measurements(TouchstoneTelemetry.Cases).Count(m => m.Tag(TouchstoneTelemetry.LabelOutcome) == TouchstoneTelemetry.OutcomeFailed), "failed case");
+                        TestAssert.Equal(typeof(CaseTimeoutException).FullName, capture.Measurements(TouchstoneTelemetry.Errors).Single().Tag(TouchstoneTelemetry.LabelErrorType), "error.type");
+                        TestAssert.Equal(true, capture.CaseSpan(id + ".Hang").GetTagItem(TouchstoneTelemetry.AttributeCaseTimedOut), "timed-out span");
+                        TestAssert.Null(capture.CaseSpan(id + ".A").GetTagItem(TouchstoneTelemetry.AttributeCaseTimedOut), "passing span");
+                    }
+                }),
+                Guarded(S, "TEL-24", "Parallel runs tag the degree of parallelism and keep every case span under its suite span", async ct =>
+                {
+                    string id = UniqueSuiteId();
+                    using (TelemetryCapture capture = new TelemetryCapture())
+                    {
+                        TestRunOptions options = new TestRunOptions { MaxDegreeOfParallelism = 4 };
+                        TestCaseDescriptor[] cases = Enumerable.Range(0, 8)
+                            .Select(i => new TestCaseDescriptor(id, "C" + i, "C" + i, async t => await Task.Delay(10, t).ConfigureAwait(false)))
+                            .ToArray();
+                        await TestExecutor.RunAsync(new[] { Fixtures.Suite(id, cases) }, null, options, ct);
+                        Activity run = capture.Span(TouchstoneTelemetry.RunSpanName);
+                        Activity suite = capture.Span(TouchstoneTelemetry.SuiteSpanName);
+                        TestAssert.Equal(4, run.GetTagItem(TouchstoneTelemetry.AttributeMaxDegreeOfParallelism), "run attribute");
+                        TestAssert.Equal(4, suite.GetTagItem(TouchstoneTelemetry.AttributeMaxDegreeOfParallelism), "suite attribute");
+                        for (int i = 0; i < 8; i++)
+                            TestAssert.Equal(suite.SpanId, capture.CaseSpan(id + ".C" + i).ParentSpanId, "case " + i + " parent");
+                        TestAssert.Equal(8, capture.Measurements(TouchstoneTelemetry.Cases).Count, "case metrics");
+                        TestAssert.Equal(0.0, capture.Measurements(TouchstoneTelemetry.CasesActive).Sum(m => m.Value), "active cases return to zero");
                     }
                 }),
             });

@@ -5,8 +5,10 @@ const Touchstone.Core.TouchstoneTelemetry.AttributeCaseCount = "touchstone.case.
 const Touchstone.Core.TouchstoneTelemetry.AttributeCaseDisplayName = "touchstone.case.display_name" -> string!
 const Touchstone.Core.TouchstoneTelemetry.AttributeCaseId = "touchstone.case.id" -> string!
 const Touchstone.Core.TouchstoneTelemetry.AttributeCaseTags = "touchstone.case.tags" -> string!
+const Touchstone.Core.TouchstoneTelemetry.AttributeCaseTimedOut = "touchstone.case.timed_out" -> string!
 const Touchstone.Core.TouchstoneTelemetry.AttributeFailedCount = "touchstone.failed_count" -> string!
 const Touchstone.Core.TouchstoneTelemetry.AttributeFilteredCount = "touchstone.filtered_count" -> string!
+const Touchstone.Core.TouchstoneTelemetry.AttributeMaxDegreeOfParallelism = "touchstone.max_degree_of_parallelism" -> string!
 const Touchstone.Core.TouchstoneTelemetry.AttributeNotRunCount = "touchstone.not_run_count" -> string!
 const Touchstone.Core.TouchstoneTelemetry.AttributeOutcome = "touchstone.outcome" -> string!
 const Touchstone.Core.TouchstoneTelemetry.AttributePassedCount = "touchstone.passed_count" -> string!
@@ -24,6 +26,7 @@ const Touchstone.Core.TouchstoneTelemetry.Cases = "touchstone.cases" -> string!
 const Touchstone.Core.TouchstoneTelemetry.CasesActive = "touchstone.cases.active" -> string!
 const Touchstone.Core.TouchstoneTelemetry.CasesFiltered = "touchstone.cases.filtered" -> string!
 const Touchstone.Core.TouchstoneTelemetry.CaseSpanName = "touchstone.case" -> string!
+const Touchstone.Core.TouchstoneTelemetry.CaseTimeouts = "touchstone.case.timeouts" -> string!
 const Touchstone.Core.TouchstoneTelemetry.Errors = "touchstone.errors" -> string!
 const Touchstone.Core.TouchstoneTelemetry.EventCaseCompleted = "case_completed" -> string!
 const Touchstone.Core.TouchstoneTelemetry.EventCaseStarted = "case_started" -> string!
@@ -94,6 +97,13 @@ static Touchstone.Core.TestRunAssert.ThrowIfNotPassed(Touchstone.Core.TestResult
 static Touchstone.Core.TestRunAssert.ThrowIfUnsuccessful(Touchstone.Core.TestRunSummary! summary, System.Collections.Generic.IReadOnlyList<Touchstone.Core.TestResult!>! results, System.Threading.CancellationToken cancellationToken) -> void
 static Touchstone.Core.TouchstoneTelemetry.SuiteLabelEnabled.get -> bool
 static Touchstone.Core.TouchstoneTelemetry.SuiteLabelEnabled.set -> void
+Touchstone.Core.CaseTimeoutException
+Touchstone.Core.CaseTimeoutException.CaseTimeoutException() -> void
+Touchstone.Core.CaseTimeoutException.CaseTimeoutException(string! message) -> void
+Touchstone.Core.CaseTimeoutException.CaseTimeoutException(string! message, System.Exception? innerException) -> void
+Touchstone.Core.CaseTimeoutException.CaseTimeoutException(string! testId, System.TimeSpan timeout, System.Exception? innerException) -> void
+Touchstone.Core.CaseTimeoutException.TestId.get -> string!
+Touchstone.Core.CaseTimeoutException.Timeout.get -> System.TimeSpan
 Touchstone.Core.DuplicateTestIdException
 Touchstone.Core.DuplicateTestIdException.DuplicateId.get -> string!
 Touchstone.Core.DuplicateTestIdException.DuplicateTestIdException() -> void
@@ -230,10 +240,14 @@ Touchstone.Core.TestResultCollector.Summary.get -> Touchstone.Core.TestRunSummar
 Touchstone.Core.TestResultCollector.TestResultCollector() -> void
 Touchstone.Core.TestRunAssert
 Touchstone.Core.TestRunOptions
+Touchstone.Core.TestRunOptions.CaseTimeout.get -> System.TimeSpan?
+Touchstone.Core.TestRunOptions.CaseTimeout.set -> void
 Touchstone.Core.TestRunOptions.CleanupTimeout.get -> System.TimeSpan
 Touchstone.Core.TestRunOptions.CleanupTimeout.set -> void
 Touchstone.Core.TestRunOptions.Filter.get -> Touchstone.Core.TestFilter!
 Touchstone.Core.TestRunOptions.Filter.set -> void
+Touchstone.Core.TestRunOptions.MaxDegreeOfParallelism.get -> int
+Touchstone.Core.TestRunOptions.MaxDegreeOfParallelism.set -> void
 Touchstone.Core.TestRunOptions.SkipBehavior.get -> Touchstone.Core.SkipBehavior
 Touchstone.Core.TestRunOptions.SkipBehavior.set -> void
 Touchstone.Core.TestRunOptions.StopOnFirstFailure.get -> bool

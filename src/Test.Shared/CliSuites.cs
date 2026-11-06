@@ -286,6 +286,22 @@ namespace Test.Shared
                     TestAssert.Contains("Filtered: 1", text, "omitted");
                     TestAssert.Equal(1, code.Value, "code");
                 }),
+                Check.Async(S, "CRUN-14", "--parallel and --case-timeout drive the run, and a timed-out case fails it with exit 1", async ct =>
+                {
+                    StrongBox<int> code = new StrongBox<int>();
+                    TestSuiteDescriptor suite = Fixtures.Suite("C",
+                        new TestCaseDescriptor("C", "Hang", "Hang display", t => Task.Delay(Timeout.Infinite, t)),
+                        Fixtures.Passing("C", "A"), Fixtures.Passing("C", "B"));
+                    string text = await RunToText(new[] { suite }, o =>
+                    {
+                        ConsoleRunnerOptions parsed = ConsoleRunnerOptions.Parse(new[] { "--parallel", "3", "--case-timeout", "0.2" });
+                        o.Run = parsed.Run;
+                    }, ct, code);
+                    TestAssert.Equal(ConsoleRunner.ExitFailure, code.Value, "exit code");
+                    TestAssert.Contains("Passed: 2", text, "passed");
+                    TestAssert.Contains("Failed: 1", text, "failed");
+                    TestAssert.Contains("C.Hang exceeded its timeout of 0.2 s", text, "timeout message listed with the failures");
+                }),
             });
         }
 
@@ -362,6 +378,25 @@ namespace Test.Shared
                 {
                     TestAssert.Throws<ArgumentNullException>(() => ConsoleRunnerOptions.Parse(null!), "null");
                     TestAssert.Throws<ConsoleArgumentException>(() => ConsoleRunnerOptions.Parse(new string[] { null! }), "null element");
+                }),
+                Check.Sync(S, "ARGS-12", "--case-timeout takes seconds from 0.001 to 86400", () =>
+                {
+                    TestAssert.Equal<TimeSpan?>(null, ConsoleRunnerOptions.Parse(Array.Empty<string>()).Run.CaseTimeout, "default");
+                    TestAssert.Equal<TimeSpan?>(TimeSpan.FromSeconds(2.5), ConsoleRunnerOptions.Parse(new[] { "--case-timeout", "2.5" }).Run.CaseTimeout, "fractional");
+                    TestAssert.Equal<TimeSpan?>(TimeSpan.FromDays(1), ConsoleRunnerOptions.Parse(new[] { "--case-timeout", "86400" }).Run.CaseTimeout, "one day");
+                    foreach (string bad in new[] { "0", "-1", "86401", "abc", "NaN", "1,5" })
+                        TestAssert.Throws<ConsoleArgumentException>(() => ConsoleRunnerOptions.Parse(new[] { "--case-timeout", bad }), bad);
+                    TestAssert.Throws<ConsoleArgumentException>(() => ConsoleRunnerOptions.Parse(new[] { "--case-timeout" }), "missing value");
+                    TestAssert.Contains("--case-timeout", ConsoleRunnerOptions.Usage, "usage");
+                }),
+                Check.Sync(S, "ARGS-13", "--parallel takes a whole number from 1 to 1024", () =>
+                {
+                    TestAssert.Equal(1, ConsoleRunnerOptions.Parse(Array.Empty<string>()).Run.MaxDegreeOfParallelism, "default");
+                    TestAssert.Equal(8, ConsoleRunnerOptions.Parse(new[] { "--parallel", "8" }).Run.MaxDegreeOfParallelism, "eight");
+                    foreach (string bad in new[] { "0", "-1", "1025", "1.5", "abc", "+2" })
+                        TestAssert.Throws<ConsoleArgumentException>(() => ConsoleRunnerOptions.Parse(new[] { "--parallel", bad }), bad);
+                    TestAssert.Throws<ConsoleArgumentException>(() => ConsoleRunnerOptions.Parse(new[] { "--parallel" }), "missing value");
+                    TestAssert.Contains("--parallel", ConsoleRunnerOptions.Usage, "usage");
                 }),
             });
         }

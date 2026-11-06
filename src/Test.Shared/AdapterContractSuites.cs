@@ -216,6 +216,14 @@ namespace Test.Shared
                     options.Filter.ExcludeTags.Add("broken");
                     await probe.RunAllAsync(new[] { Fixtures.Suite("R", Fixtures.Passing("R", "A"), new TestCaseDescriptor("R", "B", "B", _ => throw new InvalidOperationException("x"), new[] { "broken" })) }, options, ct);
                 }),
+                Check.Async(s, "ADP-26" + c, "Rows carry CaseTimeout: a hanging case fails with CaseTimeoutException after a round trip", async ct =>
+                {
+                    TestRunOptions options = new TestRunOptions { CaseTimeout = TimeSpan.FromMilliseconds(100) };
+                    AdapterRow row = probe.RoundTrip(probe.Rows(AdapterFixtureSet.Cancel, options).Single());
+                    CaseTimeoutException ex = await TestAssert.ThrowsAsync<CaseTimeoutException>(() => probe.ExecuteAsync(row, options, ct), "timed out");
+                    TestAssert.Equal("AdpA.Wait", ex.TestId, "test id");
+                    TestAssert.Equal(TimeSpan.FromMilliseconds(100), ex.Timeout, "timeout");
+                }),
                 Check.Sync(s, "ADP-24" + c, "The framework version meets the documented minimum", () =>
                 {
                     TestAssert.True(probe.FrameworkVersion >= probe.MinimumVersion, probe.FrameworkVersion + " >= " + probe.MinimumVersion);

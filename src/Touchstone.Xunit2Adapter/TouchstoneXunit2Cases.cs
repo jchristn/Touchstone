@@ -21,7 +21,7 @@ namespace Touchstone.Xunit2Adapter
         /// no row; under <see cref="SkipBehavior.Fail"/> their row fails.
         /// </summary>
         /// <typeparam name="TProvider">Suite provider with a public parameterless constructor.</typeparam>
-        /// <param name="options">Filter and skip behavior. Null uses the defaults.</param>
+        /// <param name="options">Filter, skip behavior, and case timeout. Each row carries the skip behavior and case timeout and applies them when it runs. Other settings, including MaxDegreeOfParallelism, are ignored: use the framework's own parallelization. Null uses the defaults.</param>
         /// <returns>Theory data, in suite and case order.</returns>
         /// <exception cref="ArgumentException">The provider's suites contain null, or the filter contains an invalid value.</exception>
         /// <exception cref="DuplicateTestIdException">Two suites share an identity.</exception>
@@ -37,7 +37,7 @@ namespace Touchstone.Xunit2Adapter
             {
                 if (!settings.Filter.Matches(testCase)) continue;
                 if (testCase.IsSkipped && settings.SkipBehavior == SkipBehavior.Omit) continue;
-                data.Add(new TouchstoneXunit2Case(typeof(TProvider), testCase, settings.SkipBehavior));
+                data.Add(new TouchstoneXunit2Case(typeof(TProvider), testCase, settings.SkipBehavior, settings.CaseTimeout));
             }
 
             return data;

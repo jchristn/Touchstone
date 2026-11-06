@@ -21,7 +21,7 @@ namespace Touchstone.NunitAdapter
         /// <see cref="SkipBehavior.Fail"/>, their entry fails when it runs with the same options.
         /// </summary>
         /// <param name="suites">Suites to enumerate. Suite identities must be unique.</param>
-        /// <param name="options">Filter and skip behavior. Null uses the defaults.</param>
+        /// <param name="options">Filter and skip behavior. Null uses the defaults. To apply a case timeout, pass options with TestRunOptions.CaseTimeout set to TouchstoneNunit.ExecuteAsync.</param>
         /// <returns>Test case data, in suite and case order.</returns>
         /// <exception cref="ArgumentNullException">The suite list is null.</exception>
         /// <exception cref="ArgumentException">The suite list contains null, or the filter contains an invalid value.</exception>

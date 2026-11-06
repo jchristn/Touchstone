@@ -47,6 +47,8 @@ namespace Touchstone.Core
             TouchstoneTelemetry.SinkDuration, "s", "Duration of a result sink callback.");
         private static readonly Counter<long> _SinkEvents = _Meter.CreateCounter<long>(
             TouchstoneTelemetry.SinkEvents, "{event}", "Result sink callbacks by event and outcome.");
+        private static readonly Counter<long> _CaseTimeouts = _Meter.CreateCounter<long>(
+            TouchstoneTelemetry.CaseTimeouts, "{case}", "Cases that exceeded the case timeout.");
         private static readonly Counter<long> _Errors = _Meter.CreateCounter<long>(
             TouchstoneTelemetry.Errors, "{error}", "Failures by stage and error type.");
 
@@ -262,6 +264,31 @@ namespace Touchstone.Core
             }
 
             FinishSpan(activity, outcome, exception, null);
+        }
+
+        internal static void RecordTimeout(Activity? activity, string suiteId)
+        {
+            try
+            {
+                _CaseTimeouts.Add(1, SuiteTags(suiteId));
+                activity?.SetTag(TouchstoneTelemetry.AttributeCaseTimedOut, true);
+            }
+            catch
+            {
+                // Telemetry must never change test outcomes.
+            }
+        }
+
+        internal static void TagParallelism(Activity? activity, int maxDegreeOfParallelism)
+        {
+            try
+            {
+                activity?.SetTag(TouchstoneTelemetry.AttributeMaxDegreeOfParallelism, maxDegreeOfParallelism);
+            }
+            catch
+            {
+                // Telemetry must never change test outcomes.
+            }
         }
 
         internal static void RecordFiltered(string suiteId, int count)
