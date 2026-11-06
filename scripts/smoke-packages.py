@@ -3,7 +3,9 @@
 (catalog section 11.26 and ADP-25).
 
 Usage: python3 scripts/smoke-packages.py [--version VERSION] [--results PATH] [--keep]
-The version defaults to 0.0.0-smoke. It is applied only to the local pack (-p:Version) and is never committed.
+The version defaults to the Directory.Build.props version with a -smoke suffix, so its assembly version matches the
+release and package validation against PackageValidationBaselineVersion still applies. It is used only for the local
+pack (-p:Version) and is never committed.
 A private NuGet cache is used so a stale package with the same version is never picked up.
 """
 import argparse
@@ -47,10 +49,14 @@ def dependencies(spec):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--version", default="0.0.0-smoke")
+    parser.add_argument("--version", default=None)
     parser.add_argument("--results", default=os.path.join(ROOT, "smoke-results.json"))
     parser.add_argument("--keep", action="store_true")
     args = parser.parse_args()
+    if args.version is None:
+        with open(os.path.join(ROOT, "Directory.Build.props"), encoding="utf-8") as handle:
+            release = re.search(r"<Version>([^<-]+)", handle.read()).group(1)
+        args.version = release + "-smoke"
 
     work = tempfile.mkdtemp(prefix="touchstone-smoke-")
     feed = os.path.join(work, "feed")
