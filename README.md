@@ -520,7 +520,7 @@ dotnet test test/Touchstone.SampleApp.Tests.Mstest
 
 ## Testing Touchstone
 
-Touchstone tests itself with its own descriptors. Every case identity is a row in the test catalog (V1.0_PLAN.md, section 11), and `scripts/verify-catalog.py` fails CI when a catalog row has no passing case.
+Touchstone tests itself with its own descriptors. Every case identity is a row in the test catalog ([archive/V1.0_PLAN.md](archive/V1.0_PLAN.md), section 11), and `scripts/verify-catalog.py` fails CI when a catalog row has no passing case.
 
 | Project or script | Purpose |
 |---|---|

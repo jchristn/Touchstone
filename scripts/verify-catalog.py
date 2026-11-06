@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check Touchstone test results against the test catalog in V1.0_PLAN.md section 11.
+"""Check Touchstone test results against the test catalog in archive/V1.0_PLAN.md section 11.
 
 Usage:
   python3 scripts/verify-catalog.py [--plan PATH] [--update-plan] [--require-all] [--trx DIR] results.json [...]
@@ -51,7 +51,7 @@ def catalog_id(case_id, rows):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--plan", default="V1.0_PLAN.md")
+    parser.add_argument("--plan", default="archive/V1.0_PLAN.md")
     parser.add_argument("--update-plan", action="store_true")
     parser.add_argument("--require-all", action="store_true")
     parser.add_argument("--trx", action="append", default=[])

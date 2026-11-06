@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Documentation, sample, style, and benchmark checks (catalog rows DOC-01 to DOC-06, TEL-22, SAMPLE-01 to SAMPLE-03,
-BENCH-01, BENCH-02).
+PKG-07, BENCH-01 to BENCH-03).
 
 Usage: python3 scripts/verify-docs.py [--results PATH] [--skip-slow]
 Expects the solution to be built in Release. Writes a results file for scripts/verify-catalog.py.
 """
 import argparse
+import glob
 import json
 import os
 import re
@@ -132,6 +133,25 @@ def main():
     changelog = open(os.path.join(ROOT, "CHANGELOG.md"), encoding="utf-8").read()
     record("DOC-03", "## [v" + version + "]" in changelog, "CHANGELOG has a section for v" + version)
     record("DOC-04", "\n## AOT support\n" in readme, "README has the AOT support heading")
+
+    unshipped = []
+    for path in sorted(glob.glob(os.path.join(ROOT, "src", "*", "PublicAPI.Unshipped.txt"))):
+        lines = [line for line in open(path, encoding="utf-8").read().splitlines() if line.strip() and not line.startswith("#")]
+        if lines:
+            unshipped.append(os.path.relpath(path, ROOT) + " (" + str(len(lines)) + ")")
+    stable = "-" not in version
+    record("PKG-07", not stable or not unshipped,
+        ("PublicAPI.Unshipped.txt files are empty for stable version " + version if stable else "prerelease " + version + " may carry unshipped API")
+        + (": " + ", ".join(unshipped) if unshipped and stable else ""))
+
+    baseline = json.load(open(os.path.join(ROOT, "benchmarks", "baselines", "macos-arm64.json"), encoding="utf-8"))
+    comparison = json.load(open(os.path.join(ROOT, "benchmarks", "baselines", "macos-arm64-comparison.json"), encoding="utf-8"))
+    benchmark_results = open(os.path.join(ROOT, "benchmarks", "RESULTS.md"), encoding="utf-8").read()
+    baseline_ok = (baseline.get("Complete") is True and baseline.get("DirtyState") == ""
+        and comparison.get("Regression") is False and comparison.get("BaselineCommit") == baseline.get("Commit")
+        and baseline.get("Commit", "") in benchmark_results)
+    record("BENCH-03", baseline_ok, "committed baseline " + str(baseline.get("Commit", ""))[:7]
+        + " is clean and complete, its confirmation comparison passes, and RESULTS.md cites it")
 
     offenders = []
     for path in tracked(["*.md", "*.cs", "*.csproj", "*.props", "*.targets", "*.yaml", "*.py", "*.json", "*.bat", "*.sh"]):

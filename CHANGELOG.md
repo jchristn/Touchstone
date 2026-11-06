@@ -46,7 +46,7 @@ The first stable release. Every breaking change is listed below and in MIGRATION
 
 - The README walkthrough covers every host, filtering, skip behavior, cancellation, results, AOT support, and the support policy.
 - Public API tracking (`PublicAPI.Shipped.txt` and `PublicAPI.Unshipped.txt`) and package validation for every package.
-- Test architecture: a 352-row test catalog in V1.0_PLAN.md; contract suites keyed by catalog ID; per-adapter contract suites; native outcome parity fixtures; consumer smoke tests against locally packed packages; and CI on every branch for Linux, Windows, and macOS.
+- Test architecture: a 355-row test catalog in archive/V1.0_PLAN.md; contract suites keyed by catalog ID; per-adapter contract suites; native outcome parity fixtures; consumer smoke tests against locally packed packages; and CI on every branch for Linux, Windows, and macOS.
 - Nullable reference types and explicit usings for every project; `tests/` renamed to `test/`.
 
 ### Fixed

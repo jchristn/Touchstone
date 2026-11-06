@@ -7,7 +7,7 @@ namespace Test.Shared
     using Touchstone.Core;
 
     /// <summary>
-    /// Builds catalog cases. The case identity is the catalog ID, so results can be checked against V1.0_PLAN.md section 11.
+    /// Builds catalog cases. The case identity is the catalog ID, so results can be checked against archive/V1.0_PLAN.md section 11.
     /// </summary>
     public static class Check
     {

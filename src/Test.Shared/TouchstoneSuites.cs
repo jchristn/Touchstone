@@ -8,7 +8,7 @@ namespace Test.Shared
     /// <summary>
     /// Every runner-agnostic Touchstone contract suite. Every host, including Test.Aot, consumes <see cref="All"/>.
     /// JIT hosts also run the reflection-based API convention suites from Test.Shared.Reflection.
-    /// Case identities are catalog IDs from V1.0_PLAN.md section 11.
+    /// Case identities are catalog IDs from archive/V1.0_PLAN.md section 11.
     /// </summary>
     public static class TouchstoneSuites
     {
