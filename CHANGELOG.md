@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Package validation compares every shipping package against the published 1.0.0 packages, so a breaking change fails the pack.
+- The macOS benchmark baseline is re-recorded with .NET SDK 10.0.403.
+
 ## [v1.0.0] - 2026-11-05
 
 The first stable release. Every breaking change is listed below and in MIGRATION.md.
