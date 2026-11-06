@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import zipfile
+from xml.sax.saxutils import escape
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SMOKE = os.path.join(ROOT, "test", "Consumer.Smoke")
@@ -109,8 +110,16 @@ def main():
                     pending.append(package + " (" + str(len(lines)) + ")")
             print("INFO  PKG-07 unshipped API lines: " + (", ".join(pending) if pending else "none") + " (must be empty only at release)")
 
+        # A config file, not repeated --source options: on Windows, solution restore resolves a URL passed through
+        # --source as a path relative to the project directory.
+        config = os.path.join(work, "nuget.config")
+        with open(config, "w", encoding="utf-8") as handle:
+            handle.write('<?xml version="1.0" encoding="utf-8"?>\n<configuration>\n  <packageSources>\n    <clear />\n'
+                         '    <add key="local" value="' + escape(feed) + '" />\n'
+                         '    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />\n'
+                         '  </packageSources>\n</configuration>\n')
         restore = run(["dotnet", "restore", os.path.join(SMOKE, "Consumer.Smoke.slnx"), "-p:TouchstoneVersion=" + args.version,
-                       "--source", feed, "--source", "https://api.nuget.org/v3/index.json", "-v", "q"], env)
+                       "--configfile", config, "-v", "q"], env)
         build = run(["dotnet", "build", os.path.join(SMOKE, "Consumer.Smoke.slnx"), "-c", "Release", "--no-restore",
                      "-p:TouchstoneVersion=" + args.version, "-v", "q", "-nologo"], env)
         ok = restore.returncode == 0 and build.returncode == 0
