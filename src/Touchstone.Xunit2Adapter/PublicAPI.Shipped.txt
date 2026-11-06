@@ -1,0 +1,18 @@
+#nullable enable
+abstract Touchstone.Xunit2Adapter.TouchstoneXunit2FactBase.Suites.get -> System.Collections.Generic.IReadOnlyList<Touchstone.Core.TestSuiteDescriptor!>!
+override Touchstone.Xunit2Adapter.TouchstoneXunit2Case.ToString() -> string!
+static Touchstone.Xunit2Adapter.TouchstoneXunit2.ExecuteAsync(Touchstone.Xunit2Adapter.TouchstoneXunit2Case! testCase, Xunit.Abstractions.ITestOutputHelper? output = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+static Touchstone.Xunit2Adapter.TouchstoneXunit2Cases.From<TProvider>(Touchstone.Core.TestRunOptions? options = null) -> Xunit.TheoryData<Touchstone.Xunit2Adapter.TouchstoneXunit2Case!>!
+Touchstone.Xunit2Adapter.TouchstoneXunit2
+Touchstone.Xunit2Adapter.TouchstoneXunit2Case
+Touchstone.Xunit2Adapter.TouchstoneXunit2Case.Deserialize(Xunit.Abstractions.IXunitSerializationInfo! info) -> void
+Touchstone.Xunit2Adapter.TouchstoneXunit2Case.DisplayName.get -> string!
+Touchstone.Xunit2Adapter.TouchstoneXunit2Case.Serialize(Xunit.Abstractions.IXunitSerializationInfo! info) -> void
+Touchstone.Xunit2Adapter.TouchstoneXunit2Case.SkipReason.get -> string?
+Touchstone.Xunit2Adapter.TouchstoneXunit2Case.TestId.get -> string!
+Touchstone.Xunit2Adapter.TouchstoneXunit2Case.TouchstoneXunit2Case() -> void
+Touchstone.Xunit2Adapter.TouchstoneXunit2Cases
+Touchstone.Xunit2Adapter.TouchstoneXunit2FactBase
+Touchstone.Xunit2Adapter.TouchstoneXunit2FactBase.RunAllAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Touchstone.Xunit2Adapter.TouchstoneXunit2FactBase.TouchstoneXunit2FactBase() -> void
+virtual Touchstone.Xunit2Adapter.TouchstoneXunit2FactBase.Options.get -> Touchstone.Core.TestRunOptions?

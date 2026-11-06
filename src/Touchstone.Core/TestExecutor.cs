@@ -3,84 +3,237 @@ namespace Touchstone.Core
     using System;
     using System.Collections.Generic;
     using System.Diagnostics;
-    using System.Runtime.ExceptionServices;
     using System.Threading;
     using System.Threading.Tasks;
 
     /// <summary>
-    /// Runs test suites and reports results through an optional sink.
+    /// Runs suites and cases and reports results through an optional sink.
+    /// Case failures, cancellation, and failed suite hooks are reported as results, not thrown. Only invalid arguments,
+    /// duplicate identities, and exceptions thrown by a sink escape the multi-case entry points.
     /// Every run, suite, lifecycle stage, case, and sink callback emits spans on the
     /// <see cref="TouchstoneTelemetry.ActivitySourceName"/> source and metrics on the
     /// <see cref="TouchstoneTelemetry.MeterName"/> meter. See TELEMETRY.md.
+    /// Thread safety: all members are safe to call concurrently. Each call is an independent run.
     /// </summary>
     public static class TestExecutor
     {
+        private const string MessageCanceled = "Not run: the run was canceled.";
+        private const string MessageStopped = "Not run: an earlier case failed and StopOnFirstFailure is set.";
+        private const string MessageFiltered = "Not run: the case is excluded by the filter.";
+        private const string MessageOmitted = "Not run: the case is skipped and SkipBehavior is Omit.";
+
         /// <summary>
         /// Execute several suites in order and aggregate their results.
-        /// Suites run one after another. An exception escaping a suite (from a hook or the sink) stops the run and propagates.
         /// </summary>
-        /// <param name="suites">Suites to run, in order.</param>
-        /// <param name="sink">Optional sink for real-time result reporting.</param>
-        /// <param name="cancellationToken">Cancellation token, forwarded to hooks, cases, and the sink.</param>
-        /// <returns>Aggregated summary of every suite.</returns>
-        /// <exception cref="ArgumentNullException">Thrown when <paramref name="suites"/> or any suite in it is null.</exception>
+        /// <param name="suites">Suites to run, in order. Suite identities must be unique.</param>
+        /// <param name="sink">Optional sink for live results. Null runs without one.</param>
+        /// <param name="options">Run settings. Null uses the defaults.</param>
+        /// <param name="cancellationToken">Caller cancellation. When canceled, the in-flight case finishes or cancels,
+        /// the current suite's teardown hook runs, remaining cases are reported as <see cref="TestOutcome.NotRun"/>,
+        /// and the returned summary has <see cref="TestRunSummary.WasCanceled"/> set. This method does not throw
+        /// <see cref="OperationCanceledException"/> for caller cancellation.</param>
+        /// <returns>The aggregated summary, which the sink also receives through
+        /// <see cref="ITestResultSink.OnRunCompletedAsync"/>.</returns>
+        /// <exception cref="ArgumentNullException">The suite list is null.</exception>
+        /// <exception cref="ArgumentException">The suite list contains null, or the filter contains an invalid value.</exception>
+        /// <exception cref="DuplicateTestIdException">Two suites share an identity.</exception>
         public static async Task<TestRunSummary> RunAsync(
             IReadOnlyList<TestSuiteDescriptor> suites,
             ITestResultSink? sink = null,
+            TestRunOptions? options = null,
             CancellationToken cancellationToken = default)
         {
             if (suites == null) throw new ArgumentNullException(nameof(suites));
+            ValidateSuites(suites);
+            TestRunOptions snapshot = (options ?? new TestRunOptions()).Snapshot();
 
+            RunState state = new RunState();
             Activity? activity = TouchstoneInstrumentation.StartRun(suites.Count);
             Stopwatch stopwatch = Stopwatch.StartNew();
-            TestRunSummary total = new TestRunSummary();
+            SummaryBuilder total = new SummaryBuilder();
 
             try
             {
+                if (sink != null)
+                {
+                    await InvokeSinkAsync(string.Empty, TouchstoneTelemetry.EventRunStarted,
+                        () => sink.OnRunStartedAsync(suites, cancellationToken)).ConfigureAwait(false);
+                }
+
                 foreach (TestSuiteDescriptor suite in suites)
                 {
-                    TestRunSummary summary = await RunSuiteAsync(suite, sink, cancellationToken).ConfigureAwait(false);
-                    total.Total += summary.Total;
-                    total.Passed += summary.Passed;
-                    total.Failed += summary.Failed;
-                    total.Skipped += summary.Skipped;
+                    if (!state.Halted && cancellationToken.IsCancellationRequested) state.Canceled = true;
+
+                    if (state.Halted)
+                    {
+                        Selection skipped = Select(suite, snapshot);
+                        total.NotRun += skipped.Cases.Count;
+                        total.Filtered += skipped.Filtered;
+                        continue;
+                    }
+
+                    TestRunSummary summary = await RunSuiteCoreAsync(suite, sink, snapshot, state, cancellationToken).ConfigureAwait(false);
+                    total.Add(summary);
                 }
 
                 stopwatch.Stop();
                 total.Duration = stopwatch.Elapsed;
-                TouchstoneInstrumentation.CompleteRun(activity, total, stopwatch.Elapsed, null);
-                return total;
+                total.WasCanceled = state.Canceled;
+                TestRunSummary result = total.Build();
+
+                if (sink != null)
+                {
+                    await InvokeSinkAsync(string.Empty, TouchstoneTelemetry.EventRunCompleted,
+                        () => sink.OnRunCompletedAsync(result, CancellationToken.None)).ConfigureAwait(false);
+                }
+
+                TouchstoneInstrumentation.CompleteRun(activity, result, stopwatch.Elapsed, null);
+                return result;
             }
             catch (Exception ex)
             {
                 stopwatch.Stop();
                 total.Duration = stopwatch.Elapsed;
-                TouchstoneInstrumentation.CompleteRun(activity, total, stopwatch.Elapsed, ex);
+                total.WasCanceled = state.Canceled;
+                TouchstoneInstrumentation.CompleteRun(activity, total.Build(), stopwatch.Elapsed, ex);
                 throw;
             }
         }
 
         /// <summary>
-        /// Execute all test cases in a suite.
+        /// Execute every selected case in one suite. Run-level sink callbacks are not called.
         /// </summary>
         /// <param name="suite">Suite to run.</param>
-        /// <param name="sink">Optional sink for real-time result reporting.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>Aggregated summary of the suite run.</returns>
-        /// <exception cref="ArgumentNullException">Thrown when <paramref name="suite"/> is null.</exception>
-        public static async Task<TestRunSummary> RunSuiteAsync(
+        /// <param name="sink">Optional sink for live results. Null runs without one.</param>
+        /// <param name="options">Run settings. Null uses the defaults.</param>
+        /// <param name="cancellationToken">Caller cancellation, with the same behavior as in <see cref="RunAsync"/>.</param>
+        /// <returns>The suite summary.</returns>
+        /// <exception cref="ArgumentNullException">The suite is null.</exception>
+        /// <exception cref="ArgumentException">The filter contains an invalid value.</exception>
+        public static Task<TestRunSummary> RunSuiteAsync(
             TestSuiteDescriptor suite,
             ITestResultSink? sink = null,
+            TestRunOptions? options = null,
             CancellationToken cancellationToken = default)
         {
             if (suite == null) throw new ArgumentNullException(nameof(suite));
+            TestRunOptions snapshot = (options ?? new TestRunOptions()).Snapshot();
+            return RunSuiteCoreAsync(suite, sink, snapshot, new RunState(), cancellationToken);
+        }
+
+        /// <summary>
+        /// Execute one case and return its result without throwing for case failures. Suite hooks do not run.
+        /// A case the filter excludes, or a skipped case under <see cref="SkipBehavior.Omit"/>, returns
+        /// <see cref="TestOutcome.NotRun"/> without running.
+        /// </summary>
+        /// <param name="testCase">Case to execute.</param>
+        /// <param name="sink">Optional sink. Receives case and step callbacks only.</param>
+        /// <param name="options">Run settings. Null uses the defaults.</param>
+        /// <param name="cancellationToken">Caller cancellation. A case that observes it returns <see cref="TestOutcome.Canceled"/>.</param>
+        /// <returns>The case result.</returns>
+        /// <exception cref="ArgumentNullException">The case is null.</exception>
+        /// <exception cref="ArgumentException">The filter contains an invalid value.</exception>
+        /// <remarks>An exception thrown by the sink propagates unchanged.</remarks>
+        public static async Task<TestResult> ExecuteCaseResultAsync(
+            TestCaseDescriptor testCase,
+            ITestResultSink? sink = null,
+            TestRunOptions? options = null,
+            CancellationToken cancellationToken = default)
+        {
+            if (testCase == null) throw new ArgumentNullException(nameof(testCase));
+            TestRunOptions snapshot = (options ?? new TestRunOptions()).Snapshot();
+
+            TestResult result;
+            if (!snapshot.Filter.Matches(testCase))
+                result = NotRunResult(testCase, MessageFiltered);
+            else if (testCase.IsSkipped && snapshot.SkipBehavior == SkipBehavior.Omit)
+                result = NotRunResult(testCase, MessageOmitted);
+            else
+                result = await RunCaseCoreAsync(testCase, sink, snapshot, cancellationToken).ConfigureAwait(false);
+
+            if (sink != null)
+            {
+                await InvokeSinkAsync(testCase.SuiteId, TouchstoneTelemetry.EventCaseCompleted,
+                    () => sink.OnCaseCompletedAsync(result, CancellationToken.None)).ConfigureAwait(false);
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Execute one case and throw if it does not pass. Use this from theory-style hosts so each case emits its span
+        /// and metrics. Suite hooks do not run.
+        /// Returns normally for <see cref="TestOutcome.Passed"/>, <see cref="TestOutcome.Skipped"/>, and
+        /// <see cref="TestOutcome.NotRun"/> (filtered or omitted).
+        /// </summary>
+        /// <param name="testCase">Case to execute.</param>
+        /// <param name="options">Run settings. Null uses the defaults.</param>
+        /// <param name="cancellationToken">Caller cancellation.</param>
+        /// <returns>A task that completes when the case passes, is skipped, or is not selected.</returns>
+        /// <exception cref="ArgumentNullException">The case is null.</exception>
+        /// <exception cref="ArgumentException">The filter contains an invalid value.</exception>
+        /// <exception cref="OperationCanceledException">The case observed caller cancellation.</exception>
+        /// <exception cref="SkippedCaseNotAllowedException">The case is skipped and the skip behavior is <see cref="SkipBehavior.Fail"/>.</exception>
+        /// <remarks>For a failed case, the case's original exception is rethrown with its original stack trace.</remarks>
+        public static async Task ExecuteCaseAsync(
+            TestCaseDescriptor testCase,
+            TestRunOptions? options = null,
+            CancellationToken cancellationToken = default)
+        {
+            TestResult result = await ExecuteCaseResultAsync(testCase, null, options, cancellationToken).ConfigureAwait(false);
+            TestRunAssert.ThrowIfNotPassed(result, cancellationToken);
+        }
+
+        internal static bool IsCallerCancellation(Exception exception, CancellationToken cancellationToken)
+        {
+            return exception is OperationCanceledException && cancellationToken.IsCancellationRequested;
+        }
+
+        private static void ValidateSuites(IReadOnlyList<TestSuiteDescriptor> suites)
+        {
+            HashSet<string> suiteIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (TestSuiteDescriptor? suite in suites)
+            {
+                if (suite == null) throw new ArgumentException("The suite list contains null.", nameof(suites));
+                if (!suiteIds.Add(suite.SuiteId))
+                    throw new DuplicateTestIdException(
+                        suite.SuiteId,
+                        "The run contains more than one suite with identity " + suite.SuiteId + ".",
+                        nameof(suites));
+            }
+        }
+
+        private static Selection Select(TestSuiteDescriptor suite, TestRunOptions options)
+        {
+            Selection selection = new Selection();
+            foreach (TestCaseDescriptor testCase in suite.Cases)
+            {
+                if (!options.Filter.Matches(testCase) || (testCase.IsSkipped && options.SkipBehavior == SkipBehavior.Omit))
+                    selection.Filtered++;
+                else
+                    selection.Cases.Add(testCase);
+            }
+
+            if (selection.Filtered > 0) TouchstoneInstrumentation.RecordFiltered(suite.SuiteId, selection.Filtered);
+            return selection;
+        }
+
+        private static async Task<TestRunSummary> RunSuiteCoreAsync(
+            TestSuiteDescriptor suite,
+            ITestResultSink? sink,
+            TestRunOptions options,
+            RunState state,
+            CancellationToken cancellationToken)
+        {
+            Selection selection = Select(suite, options);
+            SummaryBuilder counts = new SummaryBuilder();
+            counts.Filtered = selection.Filtered;
+            if (selection.Cases.Count == 0) return counts.Build();
 
             Activity? activity = TouchstoneInstrumentation.StartSuite(suite);
-            Stopwatch spanStopwatch = Stopwatch.StartNew();
-            Stopwatch? totalStopwatch = null;
-            int passed = 0;
-            int failed = 0;
-            int skipped = 0;
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            List<SuiteLifecycleError> lifecycleErrors = new List<SuiteLifecycleError>();
+            Exception? setupError = null;
 
             try
             {
@@ -90,31 +243,54 @@ namespace Touchstone.Core
                         () => sink.OnSuiteStartedAsync(suite, cancellationToken)).ConfigureAwait(false);
                 }
 
-                totalStopwatch = Stopwatch.StartNew();
-
-                if (suite.BeforeSuiteAsync != null)
-                {
-                    await RunStageAsync(suite.SuiteId, TouchstoneTelemetry.StageBeforeSuite,
-                        suite.BeforeSuiteAsync, cancellationToken).ConfigureAwait(false);
-                }
-
                 try
                 {
-                    foreach (TestCaseDescriptor testCase in suite.Cases)
+                    if (cancellationToken.IsCancellationRequested)
                     {
-                        TestResult result = await RunCaseAsync(testCase, cancellationToken, sink as IScenarioStepSink).ConfigureAwait(false);
+                        state.Canceled = true;
+                    }
+                    else if (suite.BeforeSuiteAsync != null)
+                    {
+                        try
+                        {
+                            await RunStageAsync(suite.SuiteId, TouchstoneTelemetry.StageBeforeSuite,
+                                suite.BeforeSuiteAsync, cancellationToken).ConfigureAwait(false);
+                        }
+                        catch (Exception ex) when (IsCallerCancellation(ex, cancellationToken))
+                        {
+                            state.Canceled = true;
+                        }
+                        catch (Exception ex)
+                        {
+                            setupError = ex;
+                            lifecycleErrors.Add(new SuiteLifecycleError(suite.SuiteId, TouchstoneTelemetry.StageBeforeSuite, ex));
+                        }
+                    }
 
-                        if (result.Skipped)
-                            skipped++;
-                        else if (result.Success)
-                            passed++;
+                    foreach (TestCaseDescriptor testCase in selection.Cases)
+                    {
+                        if (!state.Halted && cancellationToken.IsCancellationRequested) state.Canceled = true;
+
+                        TestResult result;
+                        if (state.Canceled)
+                            result = NotRunResult(testCase, MessageCanceled);
+                        else if (state.Stopped)
+                            result = NotRunResult(testCase, MessageStopped);
+                        else if (setupError != null && !(testCase.IsSkipped && options.SkipBehavior == SkipBehavior.Report))
+                            result = SetupFailedResult(testCase, setupError);
                         else
-                            failed++;
+                            result = await RunCaseCoreAsync(testCase, sink, options, cancellationToken).ConfigureAwait(false);
+
+                        if (result.Outcome == TestOutcome.Canceled) state.Canceled = true;
+                        if (result.Outcome == TestOutcome.Failed && options.StopOnFirstFailure) state.Stopped = true;
+                        if (result.Outcome == TestOutcome.NotRun) TouchstoneInstrumentation.RecordNotRun(suite.SuiteId);
+
+                        counts.Count(result.Outcome);
 
                         if (sink != null)
                         {
-                            await InvokeSinkAsync(suite.SuiteId, TouchstoneTelemetry.EventTestCompleted,
-                                () => sink.OnTestCompletedAsync(result, cancellationToken)).ConfigureAwait(false);
+                            await InvokeSinkAsync(suite.SuiteId, TouchstoneTelemetry.EventCaseCompleted,
+                                () => sink.OnCaseCompletedAsync(result, CancellationToken.None)).ConfigureAwait(false);
                         }
                     }
                 }
@@ -122,162 +298,166 @@ namespace Touchstone.Core
                 {
                     if (suite.AfterSuiteAsync != null)
                     {
-                        await RunStageAsync(suite.SuiteId, TouchstoneTelemetry.StageAfterSuite,
-                            suite.AfterSuiteAsync, cancellationToken).ConfigureAwait(false);
+                        Exception? teardownError = await RunTeardownAsync(suite, options, cancellationToken).ConfigureAwait(false);
+                        if (teardownError != null)
+                            lifecycleErrors.Add(new SuiteLifecycleError(suite.SuiteId, TouchstoneTelemetry.StageAfterSuite, teardownError));
                     }
                 }
 
-                totalStopwatch.Stop();
-
-                TestRunSummary summary = new TestRunSummary
-                {
-                    Total = suite.Cases.Count,
-                    Passed = passed,
-                    Failed = failed,
-                    Skipped = skipped,
-                    Duration = totalStopwatch.Elapsed,
-                };
+                stopwatch.Stop();
+                counts.Duration = stopwatch.Elapsed;
+                counts.WasCanceled = state.Canceled;
+                counts.LifecycleErrors.AddRange(lifecycleErrors);
+                TestRunSummary summary = counts.Build();
 
                 if (sink != null)
                 {
                     await InvokeSinkAsync(suite.SuiteId, TouchstoneTelemetry.EventSuiteCompleted,
-                        () => sink.OnSuiteCompletedAsync(suite, summary, cancellationToken)).ConfigureAwait(false);
+                        () => sink.OnSuiteCompletedAsync(suite, summary, CancellationToken.None)).ConfigureAwait(false);
                 }
 
-                spanStopwatch.Stop();
-                TouchstoneInstrumentation.CompleteSuite(activity, suite.SuiteId, summary, spanStopwatch.Elapsed, null);
+                TouchstoneInstrumentation.CompleteSuite(activity, suite.SuiteId, summary, stopwatch.Elapsed, null);
                 return summary;
             }
             catch (Exception ex)
             {
-                spanStopwatch.Stop();
-                TestRunSummary partial = new TestRunSummary
-                {
-                    Total = passed + failed + skipped,
-                    Passed = passed,
-                    Failed = failed,
-                    Skipped = skipped,
-                    Duration = totalStopwatch?.Elapsed ?? TimeSpan.Zero,
-                };
-                TouchstoneInstrumentation.CompleteSuite(activity, suite.SuiteId, partial, spanStopwatch.Elapsed, ex);
+                stopwatch.Stop();
+                counts.Duration = stopwatch.Elapsed;
+                counts.WasCanceled = state.Canceled;
+                counts.LifecycleErrors.AddRange(lifecycleErrors);
+                TouchstoneInstrumentation.CompleteSuite(activity, suite.SuiteId, counts.Build(), stopwatch.Elapsed, ex);
                 throw;
             }
         }
 
-        /// <summary>
-        /// Execute a single test case with full telemetry and rethrow its exception on failure.
-        /// Use this from theory-style hosts (xUnit MemberData, NUnit TestCaseSource, MSTest DynamicData) in place of
-        /// calling <see cref="TestCaseDescriptor.ExecuteAsync"/> directly, so each case emits its span and metrics.
-        /// Skipped cases return without executing. Suite hooks are not run.
-        /// </summary>
-        /// <param name="testCase">Case to execute.</param>
-        /// <param name="cancellationToken">Cancellation token forwarded to the case.</param>
-        /// <returns>Task that completes when the case passes or is skipped.</returns>
-        /// <exception cref="ArgumentNullException">Thrown when <paramref name="testCase"/> is null.</exception>
-        /// <exception cref="Exception">Rethrows whatever the case body threw, with its original stack trace.</exception>
-        public static async Task ExecuteCaseAsync(
-            TestCaseDescriptor testCase,
-            CancellationToken cancellationToken = default)
+        private static async Task<Exception?> RunTeardownAsync(
+            TestSuiteDescriptor suite,
+            TestRunOptions options,
+            CancellationToken cancellationToken)
         {
-            if (testCase == null) throw new ArgumentNullException(nameof(testCase));
-
-            TestResult result = await RunCaseAsync(testCase, cancellationToken).ConfigureAwait(false);
-            if (result.Exception != null)
-                ExceptionDispatchInfo.Capture(result.Exception).Throw();
-        }
-
-        /// <summary>Execute a case and return structured results without rethrowing assertion failures.
-        /// Observer errors propagate; suite hooks do not run.</summary>
-        /// <exception cref="ArgumentNullException">The case is null.</exception>
-        public static Task<TestResult> ExecuteCaseResultAsync(TestCaseDescriptor testCase,
-            CancellationToken cancellationToken = default, IScenarioStepSink? stepSink = null)
-        {
-            if (testCase == null) throw new ArgumentNullException(nameof(testCase));
-            return RunCaseAsync(testCase, cancellationToken, stepSink);
-        }
-
-        private static async Task<TestResult> RunCaseAsync(
-            TestCaseDescriptor testCase,
-            CancellationToken cancellationToken,
-            IScenarioStepSink? stepSink = null)
-        {
-            Activity? activity = TouchstoneInstrumentation.StartCase(testCase);
-            if (testCase.Scenario != null)
+            // The teardown hook gets its own token. It is canceled only once the cleanup budget has elapsed after the
+            // caller cancels, so teardown can finish even when the run is being canceled.
+            using (CancellationTokenSource budget = new CancellationTokenSource())
+            using (CancellationTokenRegistration registration = cancellationToken.Register(
+                state => ((CancellationTokenSource)state!).CancelAfter(options.CleanupTimeout), budget))
             {
-                bool active = !testCase.Skip;
-                if (active) TouchstoneInstrumentation.CaseStarted(testCase.SuiteId);
-                Stopwatch scenarioTimer = Stopwatch.StartNew();
                 try
                 {
-                    TestResult scenarioResult = await testCase.Scenario.ExecuteAsync(testCase, stepSink, cancellationToken).ConfigureAwait(false);
-                    TouchstoneInstrumentation.CompleteCase(activity, testCase.SuiteId,
-                        scenarioResult.Skipped ? TouchstoneTelemetry.OutcomeSkipped : scenarioResult.Success ? TouchstoneTelemetry.OutcomePassed : TouchstoneTelemetry.OutcomeFailed,
-                        scenarioResult.Duration, scenarioResult.Exception, active);
-                    return scenarioResult;
+                    await RunStageAsync(suite.SuiteId, TouchstoneTelemetry.StageAfterSuite,
+                        suite.AfterSuiteAsync!, budget.Token).ConfigureAwait(false);
+                    return null;
                 }
                 catch (Exception ex)
                 {
-                    TouchstoneInstrumentation.CompleteCase(activity, testCase.SuiteId, TouchstoneTelemetry.OutcomeFailed, scenarioTimer.Elapsed, ex, active);
-                    throw;
+                    return ex;
                 }
             }
+        }
 
-            if (testCase.Skip)
+        private static async Task<TestResult> RunCaseCoreAsync(
+            TestCaseDescriptor testCase,
+            ITestResultSink? sink,
+            TestRunOptions options,
+            CancellationToken cancellationToken)
+        {
+            if (testCase.IsSkipped && options.SkipBehavior == SkipBehavior.Fail)
             {
-                TouchstoneInstrumentation.CompleteCase(
-                    activity, testCase.SuiteId, TouchstoneTelemetry.OutcomeSkipped, TimeSpan.Zero, null, false);
-
-                return new TestResult
-                {
-                    TestId = testCase.TestId,
-                    SuiteId = testCase.SuiteId,
-                    CaseId = testCase.CaseId,
-                    DisplayName = testCase.DisplayName,
-                    Success = true,
-                    Skipped = true,
-                    Message = testCase.SkipReason ?? "Skipped",
-                };
+                SkippedCaseNotAllowedException error = new SkippedCaseNotAllowedException(testCase.TestId, testCase.SkipReason!);
+                Activity? skipActivity = TouchstoneInstrumentation.StartCase(testCase);
+                TouchstoneInstrumentation.CompleteCase(skipActivity, testCase.SuiteId, TouchstoneTelemetry.OutcomeFailed, TimeSpan.Zero, error, false);
+                return new TestResult(testCase.SuiteId, testCase.CaseId, testCase.DisplayName, TestOutcome.Failed, TimeSpan.Zero,
+                    error.Message, error, testCase.Tags, testCase.Metadata);
             }
 
-            TouchstoneInstrumentation.CaseStarted(testCase.SuiteId);
+            Activity? activity = TouchstoneInstrumentation.StartCase(testCase);
+            bool active = !testCase.IsSkipped;
             Stopwatch stopwatch = Stopwatch.StartNew();
+            TestResult? result = null;
+            Exception? escaped = null;
 
             try
             {
-                await testCase.ExecuteAsync(cancellationToken).ConfigureAwait(false);
-                stopwatch.Stop();
-
-                TouchstoneInstrumentation.CompleteCase(
-                    activity, testCase.SuiteId, TouchstoneTelemetry.OutcomePassed, stopwatch.Elapsed, null, true);
-
-                return new TestResult
+                if (testCase.IsSkipped && testCase.Scenario == null)
                 {
-                    TestId = testCase.TestId,
-                    SuiteId = testCase.SuiteId,
-                    CaseId = testCase.CaseId,
-                    DisplayName = testCase.DisplayName,
-                    Success = true,
-                    Duration = stopwatch.Elapsed,
-                };
+                    result = new TestResult(testCase.SuiteId, testCase.CaseId, testCase.DisplayName, TestOutcome.Skipped,
+                        TimeSpan.Zero, testCase.SkipReason, null, testCase.Tags);
+                    return result;
+                }
+
+                if (active)
+                {
+                    TouchstoneInstrumentation.CaseStarted(testCase.SuiteId);
+                    if (sink != null)
+                    {
+                        await InvokeSinkAsync(testCase.SuiteId, TouchstoneTelemetry.EventCaseStarted,
+                            () => sink.OnCaseStartedAsync(testCase, cancellationToken)).ConfigureAwait(false);
+                    }
+                }
+
+                if (testCase.Scenario != null)
+                {
+                    result = await testCase.Scenario.ExecuteAsync(testCase, sink, cancellationToken).ConfigureAwait(false);
+                    return result;
+                }
+
+                result = await RunBodyAsync(testCase, cancellationToken, stopwatch).ConfigureAwait(false);
+                return result;
+            }
+            catch (Exception ex)
+            {
+                escaped = ex;
+                throw;
+            }
+            finally
+            {
+                stopwatch.Stop();
+                string outcome = escaped != null ? TouchstoneTelemetry.OutcomeError : TelemetryOutcome(result!.Outcome);
+                TimeSpan elapsed = result?.Duration ?? stopwatch.Elapsed;
+                TouchstoneInstrumentation.CompleteCase(activity, testCase.SuiteId, outcome, elapsed, escaped ?? result?.Exception, active);
+            }
+        }
+
+        private static async Task<TestResult> RunBodyAsync(TestCaseDescriptor testCase, CancellationToken cancellationToken, Stopwatch stopwatch)
+        {
+            try
+            {
+                Task? task = testCase.Body!(cancellationToken);
+                if (task == null) throw new InvalidOperationException("The execution delegate of " + testCase.TestId + " returned a null task.");
+                await task.ConfigureAwait(false);
+                stopwatch.Stop();
+                return new TestResult(testCase.SuiteId, testCase.CaseId, testCase.DisplayName, TestOutcome.Passed,
+                    stopwatch.Elapsed, null, null, testCase.Tags);
             }
             catch (Exception ex)
             {
                 stopwatch.Stop();
+                TestOutcome outcome = IsCallerCancellation(ex, cancellationToken) ? TestOutcome.Canceled : TestOutcome.Failed;
+                return new TestResult(testCase.SuiteId, testCase.CaseId, testCase.DisplayName, outcome,
+                    stopwatch.Elapsed, ex.Message, ex, testCase.Tags);
+            }
+        }
 
-                TouchstoneInstrumentation.CompleteCase(
-                    activity, testCase.SuiteId, TouchstoneTelemetry.OutcomeFailed, stopwatch.Elapsed, ex, true);
+        private static TestResult NotRunResult(TestCaseDescriptor testCase, string message)
+        {
+            return new TestResult(testCase.SuiteId, testCase.CaseId, testCase.DisplayName, TestOutcome.NotRun, TimeSpan.Zero,
+                message, null, testCase.Tags, testCase.Metadata);
+        }
 
-                return new TestResult
-                {
-                    TestId = testCase.TestId,
-                    SuiteId = testCase.SuiteId,
-                    CaseId = testCase.CaseId,
-                    DisplayName = testCase.DisplayName,
-                    Success = false,
-                    Duration = stopwatch.Elapsed,
-                    Exception = ex,
-                    Message = ex.Message,
-                };
+        private static TestResult SetupFailedResult(TestCaseDescriptor testCase, Exception setupError)
+        {
+            return new TestResult(testCase.SuiteId, testCase.CaseId, testCase.DisplayName, TestOutcome.Failed, TimeSpan.Zero,
+                "Suite setup (before_suite) failed: " + setupError.Message, setupError, testCase.Tags, testCase.Metadata);
+        }
+
+        private static string TelemetryOutcome(TestOutcome outcome)
+        {
+            switch (outcome)
+            {
+                case TestOutcome.Passed: return TouchstoneTelemetry.OutcomePassed;
+                case TestOutcome.Skipped: return TouchstoneTelemetry.OutcomeSkipped;
+                case TestOutcome.Canceled: return TouchstoneTelemetry.OutcomeCanceled;
+                case TestOutcome.NotRun: return TouchstoneTelemetry.OutcomeNotRun;
+                default: return TouchstoneTelemetry.OutcomeFailed;
             }
         }
 
@@ -316,6 +496,74 @@ namespace Touchstone.Core
             {
                 TouchstoneInstrumentation.CompleteSink(activity, suiteId, sinkEvent, Stopwatch.GetElapsedTime(start), ex);
                 throw;
+            }
+        }
+
+        private sealed class RunState
+        {
+            internal bool Canceled { get; set; }
+
+            internal bool Stopped { get; set; }
+
+            internal bool Halted
+            {
+                get { return Canceled || Stopped; }
+            }
+        }
+
+        private sealed class Selection
+        {
+            internal List<TestCaseDescriptor> Cases { get; } = new List<TestCaseDescriptor>();
+
+            internal int Filtered { get; set; }
+        }
+
+        private sealed class SummaryBuilder
+        {
+            internal int Passed { get; set; }
+
+            internal int Failed { get; set; }
+
+            internal int Skipped { get; set; }
+
+            internal int Canceled { get; set; }
+
+            internal int NotRun { get; set; }
+
+            internal int Filtered { get; set; }
+
+            internal TimeSpan Duration { get; set; }
+
+            internal bool WasCanceled { get; set; }
+
+            internal List<SuiteLifecycleError> LifecycleErrors { get; } = new List<SuiteLifecycleError>();
+
+            internal void Count(TestOutcome outcome)
+            {
+                switch (outcome)
+                {
+                    case TestOutcome.Passed: Passed++; break;
+                    case TestOutcome.Failed: Failed++; break;
+                    case TestOutcome.Skipped: Skipped++; break;
+                    case TestOutcome.Canceled: Canceled++; break;
+                    default: NotRun++; break;
+                }
+            }
+
+            internal void Add(TestRunSummary summary)
+            {
+                Passed += summary.Passed;
+                Failed += summary.Failed;
+                Skipped += summary.Skipped;
+                Canceled += summary.Canceled;
+                NotRun += summary.NotRun;
+                Filtered += summary.Filtered;
+                LifecycleErrors.AddRange(summary.LifecycleErrors);
+            }
+
+            internal TestRunSummary Build()
+            {
+                return new TestRunSummary(Passed, Failed, Skipped, Canceled, NotRun, Filtered, Duration, WasCanceled, LifecycleErrors);
             }
         }
     }

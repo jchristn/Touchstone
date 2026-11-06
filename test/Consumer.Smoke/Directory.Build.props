@@ -1,0 +1,17 @@
+<Project>
+
+  <!--
+    Consumer smoke tests reference Touchstone by package version from a local feed, the way a real consumer does.
+    They deliberately do not import the repository's Directory.Build.props.
+    scripts/smoke-packages.py sets TouchstoneVersion and the feed.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <TouchstoneVersion Condition="'$(TouchstoneVersion)' == ''">0.0.0-smoke</TouchstoneVersion>
+  </PropertyGroup>
+
+</Project>

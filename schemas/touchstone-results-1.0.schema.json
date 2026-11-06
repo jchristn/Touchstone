@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jchristn/touchstone/schemas/touchstone-results-1.0.schema.json",
+  "title": "Touchstone results",
+  "description": "Results written by Touchstone.Cli JsonReport and ConsoleRunner --results. Schema version 1.0. Fields may be added in later 1.x schema versions; none are removed or retyped.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "tool", "run", "results"],
+  "properties": {
+    "schemaVersion": { "type": "string", "const": "1.0" },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "const": "Touchstone" },
+        "version": { "type": "string" }
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["startedUtc", "durationMs", "canceled", "summary", "lifecycleErrors"],
+      "properties": {
+        "startedUtc": { "type": "string", "description": "ISO 8601 round-trip UTC timestamp." },
+        "durationMs": { "type": "number", "minimum": 0 },
+        "canceled": { "type": "boolean" },
+        "summary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["total", "passed", "failed", "skipped", "canceled", "notRun", "filtered"],
+          "properties": {
+            "total": { "type": "integer", "minimum": 0 },
+            "passed": { "type": "integer", "minimum": 0 },
+            "failed": { "type": "integer", "minimum": 0 },
+            "skipped": { "type": "integer", "minimum": 0 },
+            "canceled": { "type": "integer", "minimum": 0 },
+            "notRun": { "type": "integer", "minimum": 0 },
+            "filtered": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "lifecycleErrors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["suiteId", "stage", "message"],
+            "properties": {
+              "suiteId": { "type": "string" },
+              "stage": { "type": "string", "enum": ["before_suite", "after_suite"] },
+              "message": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["testId", "suiteId", "caseId", "displayName", "outcome", "durationMs", "message", "tags", "feature", "exampleId", "requirements", "cleanupErrors", "steps"],
+        "properties": {
+          "testId": { "type": "string" },
+          "suiteId": { "type": "string" },
+          "caseId": { "type": "string" },
+          "displayName": { "type": "string" },
+          "outcome": { "type": "string", "enum": ["passed", "failed", "skipped", "canceled", "not_run"] },
+          "durationMs": { "type": "number", "minimum": 0 },
+          "message": { "type": ["string", "null"] },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "feature": { "type": ["string", "null"] },
+          "exampleId": { "type": ["string", "null"] },
+          "requirements": { "type": "array", "items": { "type": "string" } },
+          "cleanupErrors": { "type": "array", "items": { "type": "string" } },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["stepId", "displayName", "kind", "outcome", "durationMs", "message"],
+              "properties": {
+                "stepId": { "type": "string" },
+                "displayName": { "type": "string" },
+                "kind": { "type": "string", "enum": ["given", "when", "then"] },
+                "outcome": { "type": "string", "enum": ["passed", "failed", "skipped", "canceled", "not_run"] },
+                "durationMs": { "type": "number", "minimum": 0 },
+                "message": { "type": ["string", "null"] }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

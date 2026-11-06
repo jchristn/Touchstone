@@ -1,18 +1,33 @@
-#nullable enable
 namespace Touchstone.Core
 {
-    /// <summary>Execution outcome of a scenario step.</summary>
+    /// <summary>
+    /// Execution outcome of a scenario step.
+    /// </summary>
     public enum ScenarioStepOutcome
     {
-        /// <summary>The step was not reached.</summary>
-        NotRun,
-        /// <summary>The step passed.</summary>
-        Passed,
-        /// <summary>The step failed.</summary>
-        Failed,
-        /// <summary>The descriptor was skipped.</summary>
-        Skipped,
-        /// <summary>The caller canceled execution.</summary>
-        Canceled
+        /// <summary>
+        /// The step was not reached because an earlier operation did not complete successfully.
+        /// </summary>
+        NotRun = 0,
+
+        /// <summary>
+        /// The step completed without an exception.
+        /// </summary>
+        Passed = 1,
+
+        /// <summary>
+        /// The step threw.
+        /// </summary>
+        Failed = 2,
+
+        /// <summary>
+        /// The scenario was skipped, so the step did not run.
+        /// </summary>
+        Skipped = 3,
+
+        /// <summary>
+        /// The step observed caller cancellation.
+        /// </summary>
+        Canceled = 4,
     }
 }

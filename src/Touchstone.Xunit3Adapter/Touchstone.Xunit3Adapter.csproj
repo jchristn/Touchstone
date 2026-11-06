@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TouchstoneShipping>true</TouchstoneShipping>
+    <Description>xUnit v3 adapter for Touchstone. Run shared test descriptors under xUnit v3 as one theory row per case, with native skips, display names, and traits, or all at once in a single fact.</Description>
+    <PackageTags>testing;xunit;xunit3;xunit.v3;test-adapter;descriptors</PackageTags>
+    <IsPackable>true</IsPackable>
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Touchstone.Core\Touchstone.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3.extensibility.core" Version="4.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Touchstone.AdapterShared\CaseIndex.cs" Link="Shared\CaseIndex.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\assets\logo-black.png" Pack="true" PackagePath="\" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

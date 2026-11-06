@@ -1,41 +1,41 @@
 namespace Test.Mstest
 {
     using System.Collections.Generic;
-    using System.Threading;
     using System.Threading.Tasks;
+
     using Microsoft.VisualStudio.TestTools.UnitTesting;
-    using Test.Shared;
-    using Touchstone.Core;
     using Touchstone.MstestAdapter;
 
     /// <summary>
-    /// Runs each shared descriptor as a separate MSTest data row.
+    /// Runs each case as its own MSTest data row, with native names, categories, and ignores.
     /// </summary>
     [TestClass]
     public sealed class TouchstoneMstestTests
     {
-        /// <summary>Native per-test output context.</summary>
+        /// <summary>
+        /// The running test's context, set by MSTest.
+        /// </summary>
         public TestContext TestContext { get; set; } = null!;
 
         /// <summary>
-        /// Non-skipped shared descriptors as DynamicData rows.
+        /// One row per case.
         /// </summary>
-        /// <returns>Rows, each containing one descriptor.</returns>
-        public static IEnumerable<object[]> TestCases()
+        /// <returns>Data rows.</returns>
+        public static IEnumerable<TestDataRow<TouchstoneMstestCase>> Cases()
         {
-            return TouchstoneDynamicData.FromSuites(TouchstoneSuites.All);
+            return TouchstoneMstestCases.From<HostSuites>();
         }
 
         /// <summary>
-        /// Execute a single shared descriptor.
+        /// Execute one case.
         /// </summary>
-        /// <param name="testCase">Descriptor to execute.</param>
-        /// <returns>Task.</returns>
+        /// <param name="testCase">The case.</param>
+        /// <returns>A task that completes when the case passes.</returns>
         [TestMethod]
-        [DynamicData(nameof(TestCases))]
-        public async Task RunTest(TestCaseDescriptor testCase)
+        [DynamicData(nameof(Cases))]
+        public Task Run(TouchstoneMstestCase testCase)
         {
-            await ScenarioDiagnostics.ExecuteAsync(testCase, text => TestContext.WriteLine(text), CancellationToken.None).ConfigureAwait(false);
+            return TouchstoneMstest.ExecuteAsync(testCase, TestContext, TestContext.CancellationToken);
         }
     }
 }

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <!--
+    xunit.v3.mtp-off keeps this host on VSTest so `dotnet test Touchstone.slnx` runs every host the same way on the
+    .NET 10 SDK. Consumers may use either the Microsoft Testing Platform or VSTest; the adapter supports both.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <PackageReference Include="xunit.v3.mtp-off" Version="4.0.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Test.Shared\Test.Shared.csproj" />
+    <ProjectReference Include="..\Test.Shared.Reflection\Test.Shared.Reflection.csproj" />
+    <ProjectReference Include="..\Test.Shared.Xunit3\Test.Shared.Xunit3.csproj" />
+    <ProjectReference Include="..\Touchstone.Xunit3Adapter\Touchstone.Xunit3Adapter.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -2,105 +2,148 @@ namespace Touchstone.Cli
 {
     using System;
     using System.Collections.Generic;
-    using System.Diagnostics;
-    using System.IO;
-    using System.Linq;
-    using System.Text.Json;
     using System.Threading;
     using System.Threading.Tasks;
 
     using Touchstone.Core;
 
     /// <summary>
-    /// Runs test suites through the console with tabular output and optional JSON export.
+    /// Runs suites in a console host with tabular output, optional JSON and HTML reports, and stable exit codes.
+    /// Thread safety: all members are safe to call concurrently with different options and writers.
     /// </summary>
     public static class ConsoleRunner
     {
         /// <summary>
-        /// Execute all suites and write results to the console.
+        /// Exit code: every selected case passed or was skipped, and no suite hook failed.
         /// </summary>
-        /// <param name="suites">Suites to run.</param>
-        /// <param name="sink">Optional custom sink. A default sink is created when null.</param>
-        /// <param name="resultsPath">Optional file path for JSON result export.</param>
-        /// <param name="cancellationToken">Cancellation token.</param>
-        /// <returns>Exit code: 0 when all tests pass, 1 when any test fails.</returns>
+        public const int ExitSuccess = 0;
+
+        /// <summary>
+        /// Exit code: a case failed or was not run, or a suite hook failed.
+        /// </summary>
+        public const int ExitFailure = 1;
+
+        /// <summary>
+        /// Exit code: the run was canceled.
+        /// </summary>
+        public const int ExitCanceled = 2;
+
+        /// <summary>
+        /// Exit code: the command-line arguments were invalid. No test ran.
+        /// </summary>
+        public const int ExitInvalidArguments = 3;
+
+        /// <summary>
+        /// Run suites with explicit options.
+        /// </summary>
+        /// <param name="suites">Suites to run, in order.</param>
+        /// <param name="options">Runner settings. Null uses the defaults.</param>
+        /// <param name="cancellationToken">Caller cancellation. A canceled run returns <see cref="ExitCanceled"/>.</param>
+        /// <returns><see cref="ExitSuccess"/>, <see cref="ExitFailure"/>, or <see cref="ExitCanceled"/>.</returns>
+        /// <exception cref="ArgumentNullException">The suite list is null.</exception>
+        /// <exception cref="ArgumentException">The suite list contains null, or the filter contains an invalid value.</exception>
+        /// <exception cref="DuplicateTestIdException">Two suites share an identity.</exception>
+        /// <exception cref="System.IO.IOException">A report file cannot be written. The console summary is written first.</exception>
+        /// <remarks>An exception thrown by an additional sink propagates unchanged.</remarks>
         public static async Task<int> RunAsync(
             IReadOnlyList<TestSuiteDescriptor> suites,
-            ConsoleResultSink? sink = null,
-            string? resultsPath = null,
+            ConsoleRunnerOptions? options = null,
             CancellationToken cancellationToken = default)
         {
             if (suites == null) throw new ArgumentNullException(nameof(suites));
 
-            sink = sink ?? new ConsoleResultSink();
-            sink.WriteHeader();
+            ConsoleRunnerOptions settings = options ?? new ConsoleRunnerOptions();
+            ConsoleResultSink console = new ConsoleResultSink(settings);
+            List<ITestResultSink> sinks = new List<ITestResultSink> { console };
+            sinks.AddRange(settings.AdditionalSinks);
+            ITestResultSink sink = sinks.Count == 1 ? console : new CompositeSink(sinks);
 
-            TestRunSummary summary = await TestExecutor.RunAsync(suites, sink, cancellationToken).ConfigureAwait(false);
-            sink.WriteOverall(summary.Duration, summary.Total, summary.Passed, summary.Failed, summary.Skipped);
+            DateTimeOffset started = DateTimeOffset.UtcNow;
+            TestRunSummary summary = await TestExecutor.RunAsync(suites, sink, settings.Run, cancellationToken).ConfigureAwait(false);
 
-            if (!string.IsNullOrEmpty(resultsPath))
-            {
-                ExportResults(sink.AllResults, resultsPath, sink.Redact);
-            }
+            ReportOptions report = new ReportOptions { StartedUtc = started, Redact = settings.Redact };
+            if (!string.IsNullOrWhiteSpace(settings.RunId)) report.RunId = settings.RunId;
 
-            return summary.Failed == 0 ? 0 : 1;
+            if (!string.IsNullOrEmpty(settings.JsonResultsPath))
+                await JsonReport.WriteAsync(summary, console.AllResults, settings.JsonResultsPath, report, CancellationToken.None).ConfigureAwait(false);
+
+            if (!string.IsNullOrEmpty(settings.HtmlReportPath))
+                await HtmlReport.WriteAsync(summary, console.AllResults, settings.HtmlReportPath, report, CancellationToken.None).ConfigureAwait(false);
+
+            return ExitCodeOf(summary);
         }
 
-        private static void ExportResults(IReadOnlyList<TestResult> results, string path, Func<string, string> redact)
+        /// <summary>
+        /// Parse command-line arguments and run suites; intended to be returned from <c>Main</c>. Ctrl+C cancels the run. Invalid arguments write the error and
+        /// usage to standard error and return <see cref="ExitInvalidArguments"/>; <c>--help</c> writes usage and returns
+        /// <see cref="ExitSuccess"/>. Neither runs tests.
+        /// </summary>
+        /// <param name="suites">Suites to run, in order.</param>
+        /// <param name="args">Command-line arguments. See <see cref="ConsoleRunnerOptions.Usage"/>.</param>
+        /// <param name="cancellationToken">Caller cancellation, combined with Ctrl+C.</param>
+        /// <returns>One of the <c>Exit</c> constants.</returns>
+        /// <exception cref="ArgumentNullException">The suite list or argument array is null.</exception>
+        /// <exception cref="ArgumentException">The suite list contains null.</exception>
+        /// <exception cref="DuplicateTestIdException">Two suites share an identity.</exception>
+        /// <exception cref="System.IO.IOException">A report file cannot be written. The console summary is written first.</exception>
+        public static async Task<int> RunMainAsync(
+            IReadOnlyList<TestSuiteDescriptor> suites,
+            string[] args,
+            CancellationToken cancellationToken = default)
         {
-            Activity? activity = CliInstrumentation.StartExport(CliInstrumentation.FormatJson, results.Count);
-            long start = Stopwatch.GetTimestamp();
+            if (suites == null) throw new ArgumentNullException(nameof(suites));
+            if (args == null) throw new ArgumentNullException(nameof(args));
 
+            ConsoleRunnerOptions options;
             try
             {
-                WriteJson(results, path, redact);
-                CliInstrumentation.CompleteExport(activity, CliInstrumentation.FormatJson, Stopwatch.GetElapsedTime(start), null);
+                options = ConsoleRunnerOptions.Parse(args);
             }
-            catch (Exception ex)
+            catch (ConsoleArgumentException ex)
             {
-                CliInstrumentation.CompleteExport(activity, CliInstrumentation.FormatJson, Stopwatch.GetElapsedTime(start), ex);
-                throw;
+                Console.Error.WriteLine(ex.Message);
+                Console.Error.WriteLine(ConsoleRunnerOptions.Usage);
+                return ExitInvalidArguments;
+            }
+
+            if (options.ShowHelp)
+            {
+                Console.Out.WriteLine(ConsoleRunnerOptions.Usage);
+                return ExitSuccess;
+            }
+
+            using (CancellationTokenSource interrupt = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+            {
+                ConsoleCancelEventHandler handler = (sender, e) =>
+                {
+                    e.Cancel = true;
+                    interrupt.Cancel();
+                };
+
+                Console.CancelKeyPress += handler;
+                try
+                {
+                    return await RunAsync(suites, options, interrupt.Token).ConfigureAwait(false);
+                }
+                finally
+                {
+                    Console.CancelKeyPress -= handler;
+                }
             }
         }
 
-        private static void WriteJson(IReadOnlyList<TestResult> results, string path, Func<string, string> redact)
+        /// <summary>
+        /// Map a summary to an exit code.
+        /// </summary>
+        /// <param name="summary">The run summary.</param>
+        /// <returns><see cref="ExitCanceled"/> for a canceled run, <see cref="ExitSuccess"/> for a successful run, and
+        /// <see cref="ExitFailure"/> otherwise.</returns>
+        /// <exception cref="ArgumentNullException">The summary is null.</exception>
+        public static int ExitCodeOf(TestRunSummary summary)
         {
-            List<JsonResultEntry> entries = new List<JsonResultEntry>();
-
-            foreach (TestResult result in results)
-            {
-                entries.Add(new JsonResultEntry
-                {
-                    TestId = redact(result.TestId),
-                    SuiteId = redact(result.SuiteId),
-                    CaseId = redact(result.CaseId),
-                    DisplayName = redact(result.DisplayName),
-                    Success = result.Success,
-                    Skipped = result.Skipped,
-                    DurationMs = (long)Math.Round(result.Duration.TotalMilliseconds, MidpointRounding.AwayFromZero),
-                    Message = result.Message == null ? null : redact(result.Message),
-                    Canceled = result.Canceled,
-                    Feature = result.Metadata == null ? null : redact(result.Metadata.Feature),
-                    ExampleId = result.Metadata?.ExampleId == null ? null : redact(result.Metadata.ExampleId),
-                    Requirements = result.Metadata?.Requirements.Select(redact).ToArray() ?? Array.Empty<string>(),
-                    CleanupErrors = result.CleanupExceptions.Select(error => redact(error.Message)).ToArray(),
-                    Steps = result.Steps.Select(step => new JsonStepEntry
-                    {
-                        StepId = redact(step.StepId), DisplayName = redact(step.DisplayName), Kind = step.Kind.ToString(),
-                        Outcome = step.Outcome.ToString(), DurationMs = step.Duration.TotalMilliseconds,
-                        Message = step.Message == null ? null : redact(step.Message)
-                    }).ToArray(),
-                });
-            }
-
-            JsonSerializerOptions options = new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            };
-
-            string json = JsonSerializer.Serialize(entries, options);
-            File.WriteAllText(path, json);
+            if (summary == null) throw new ArgumentNullException(nameof(summary));
+            if (summary.WasCanceled) return ExitCanceled;
+            return summary.IsSuccess ? ExitSuccess : ExitFailure;
         }
     }
 }

@@ -1,44 +1,97 @@
-#nullable enable
 namespace Touchstone.Core
 {
     using System;
     using System.Diagnostics;
     using System.Diagnostics.Metrics;
+
+    /// <summary>
+    /// Records scenario context, step, and cleanup telemetry on the shared Touchstone meter and activity source.
+    /// Every method is best-effort: a failure inside telemetry never changes test outcomes.
+    /// </summary>
     internal static class ScenarioTelemetry
     {
-        private static readonly ActivitySource _Source = new ActivitySource(TouchstoneTelemetry.ActivitySourceName, TouchstoneInstrumentation.Version);
-        private static readonly Meter _Meter = new Meter(TouchstoneTelemetry.MeterName, TouchstoneInstrumentation.Version);
-        private static readonly Counter<long> _Operations = _Meter.CreateCounter<long>(TouchstoneTelemetry.ScenarioOperations, "{operation}");
-        private static readonly Histogram<double> _Duration = _Meter.CreateHistogram<double>(TouchstoneTelemetry.ScenarioOperationDuration, "s");
+        private const string KindNone = "none";
+
+        private static readonly Counter<long> _Operations = TouchstoneInstrumentation.Meter.CreateCounter<long>(
+            TouchstoneTelemetry.ScenarioOperations, "{operation}", "Scenario context, step, and cleanup operations.");
+        private static readonly Histogram<double> _Duration = TouchstoneInstrumentation.Meter.CreateHistogram<double>(
+            TouchstoneTelemetry.ScenarioOperationDuration, "s", "Duration of scenario operations.");
 
         internal static Activity? Start(string operation, ScenarioStepKind? kind = null)
         {
             try
             {
-                Activity? activity = _Source.StartActivity("scenario:" + operation);
-                activity?.SetTag("touchstone.step.kind", kind?.ToString());
+                Activity? activity = TouchstoneInstrumentation.Source.StartActivity(SpanName(operation), ActivityKind.Internal);
+                if (activity != null && kind.HasValue) activity.SetTag(TouchstoneTelemetry.AttributeStepKind, KindName(kind.Value));
                 return activity;
             }
-            catch { return null; }
+            catch
+            {
+                // Telemetry must never change test outcomes.
+                return null;
+            }
         }
+
         internal static void Complete(Activity? activity, string operation, string outcome, TimeSpan duration, ScenarioStepKind? kind = null, Exception? exception = null)
         {
             try
             {
-                activity?.SetTag("touchstone.outcome", outcome);
-                if (exception != null) activity?.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
+                TagList tags = new TagList
                 {
-                    { "exception.type", exception.GetType().FullName }
-                }));
-                activity?.SetStatus(outcome == "Failed" ? ActivityStatusCode.Error : ActivityStatusCode.Unset);
-                TagList tags = new TagList { { "operation", operation }, { "outcome", outcome }, { "kind", kind?.ToString() ?? "none" } };
+                    { TouchstoneTelemetry.LabelOperation, operation },
+                    { TouchstoneTelemetry.LabelOutcome, outcome },
+                    { TouchstoneTelemetry.LabelKind, kind.HasValue ? KindName(kind.Value) : KindNone },
+                };
                 _Operations.Add(1, tags);
                 _Duration.Record(duration.TotalSeconds, tags);
+
+                if (activity != null)
+                {
+                    activity.SetTag(TouchstoneTelemetry.AttributeOutcome, outcome);
+                    if (exception != null)
+                    {
+                        activity.SetTag(TouchstoneTelemetry.LabelErrorType, TouchstoneInstrumentation.ErrorType(exception));
+                        TouchstoneInstrumentation.AddExceptionEvent(activity, exception);
+                    }
+
+                    activity.SetStatus(outcome == TouchstoneTelemetry.OutcomeFailed ? ActivityStatusCode.Error : ActivityStatusCode.Ok);
+                }
             }
-            catch { }
+            catch
+            {
+                // Telemetry must never change test outcomes.
+            }
             finally
             {
-                try { activity?.Dispose(); } catch { }
+                try
+                {
+                    activity?.Dispose();
+                }
+                catch
+                {
+                    // A listener threw while the span stopped. Restore the ambient span so later spans keep the right parent.
+                    if (activity != null && Activity.Current == activity) Activity.Current = activity.Parent;
+                }
+            }
+        }
+
+        private static string SpanName(string operation)
+        {
+            switch (operation)
+            {
+                case TouchstoneTelemetry.ScenarioOperationContext: return TouchstoneTelemetry.ScenarioContextSpanName;
+                case TouchstoneTelemetry.ScenarioOperationStep: return TouchstoneTelemetry.ScenarioStepSpanName;
+                default: return TouchstoneTelemetry.ScenarioCleanupSpanName;
+            }
+        }
+
+        private static string KindName(ScenarioStepKind kind)
+        {
+            switch (kind)
+            {
+                case ScenarioStepKind.Given: return "given";
+                case ScenarioStepKind.When: return "when";
+                default: return "then";
             }
         }
     }

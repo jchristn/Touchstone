@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+
+  <!-- NUnit adapter contract suites. Consumed by Test.Nunit, which runs them inside real NUnit tests. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Test.Shared\Test.Shared.csproj" />
+    <ProjectReference Include="..\Test.Shared.Reflection\Test.Shared.Reflection.csproj" />
+    <ProjectReference Include="..\Touchstone.NunitAdapter\Touchstone.NunitAdapter.csproj" />
+  </ItemGroup>
+
+</Project>

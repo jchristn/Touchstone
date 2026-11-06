@@ -1,0 +1,60 @@
+#nullable enable
+const Touchstone.Cli.ConsoleRunner.ExitCanceled = 2 -> int
+const Touchstone.Cli.ConsoleRunner.ExitFailure = 1 -> int
+const Touchstone.Cli.ConsoleRunner.ExitInvalidArguments = 3 -> int
+const Touchstone.Cli.ConsoleRunner.ExitSuccess = 0 -> int
+const Touchstone.Cli.JsonReport.SchemaVersion = "1.0" -> string!
+static Touchstone.Cli.ConsoleRunner.ExitCodeOf(Touchstone.Core.TestRunSummary! summary) -> int
+static Touchstone.Cli.ConsoleRunner.RunAsync(System.Collections.Generic.IReadOnlyList<Touchstone.Core.TestSuiteDescriptor!>! suites, Touchstone.Cli.ConsoleRunnerOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+static Touchstone.Cli.ConsoleRunner.RunMainAsync(System.Collections.Generic.IReadOnlyList<Touchstone.Core.TestSuiteDescriptor!>! suites, string![]! args, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+static Touchstone.Cli.ConsoleRunnerOptions.Parse(string![]! args) -> Touchstone.Cli.ConsoleRunnerOptions!
+static Touchstone.Cli.ConsoleRunnerOptions.Usage.get -> string!
+static Touchstone.Cli.HtmlReport.WriteAsync(Touchstone.Core.TestRunSummary! summary, System.Collections.Generic.IReadOnlyList<Touchstone.Core.TestResult!>! results, string! path, Touchstone.Cli.ReportOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+static Touchstone.Cli.JsonReport.Schema.get -> string!
+static Touchstone.Cli.JsonReport.WriteAsync(Touchstone.Core.TestRunSummary! summary, System.Collections.Generic.IReadOnlyList<Touchstone.Core.TestResult!>! results, string! path, Touchstone.Cli.ReportOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Touchstone.Cli.ConsoleArgumentException
+Touchstone.Cli.ConsoleArgumentException.ConsoleArgumentException() -> void
+Touchstone.Cli.ConsoleArgumentException.ConsoleArgumentException(string! message) -> void
+Touchstone.Cli.ConsoleArgumentException.ConsoleArgumentException(string! message, System.Exception? innerException) -> void
+Touchstone.Cli.ConsoleResultSink
+Touchstone.Cli.ConsoleResultSink.AllResults.get -> System.Collections.Generic.IReadOnlyList<Touchstone.Core.TestResult!>!
+Touchstone.Cli.ConsoleResultSink.ConsoleResultSink(Touchstone.Cli.ConsoleRunnerOptions? options = null) -> void
+Touchstone.Cli.ConsoleResultSink.DescriptionColumnWidth.get -> int
+Touchstone.Cli.ConsoleResultSink.OnCaseCompletedAsync(Touchstone.Core.TestResult! result, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Touchstone.Cli.ConsoleResultSink.OnRunCompletedAsync(Touchstone.Core.TestRunSummary! summary, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Touchstone.Cli.ConsoleResultSink.OnRunStartedAsync(System.Collections.Generic.IReadOnlyList<Touchstone.Core.TestSuiteDescriptor!>! suites, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Touchstone.Cli.ConsoleResultSink.OnStepCompletedAsync(string! testId, Touchstone.Core.ScenarioStepResult! step, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Touchstone.Cli.ConsoleResultSink.OnStepStartedAsync(string! testId, Touchstone.Core.ScenarioStepResult! step, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Touchstone.Cli.ConsoleResultSink.Summary.get -> Touchstone.Core.TestRunSummary?
+Touchstone.Cli.ConsoleRunner
+Touchstone.Cli.ConsoleRunnerOptions
+Touchstone.Cli.ConsoleRunnerOptions.AdditionalSinks.get -> System.Collections.Generic.IList<Touchstone.Core.ITestResultSink!>!
+Touchstone.Cli.ConsoleRunnerOptions.ConsoleRunnerOptions() -> void
+Touchstone.Cli.ConsoleRunnerOptions.ExpandSteps.get -> bool
+Touchstone.Cli.ConsoleRunnerOptions.ExpandSteps.set -> void
+Touchstone.Cli.ConsoleRunnerOptions.HtmlReportPath.get -> string?
+Touchstone.Cli.ConsoleRunnerOptions.HtmlReportPath.set -> void
+Touchstone.Cli.ConsoleRunnerOptions.JsonResultsPath.get -> string?
+Touchstone.Cli.ConsoleRunnerOptions.JsonResultsPath.set -> void
+Touchstone.Cli.ConsoleRunnerOptions.Redact.get -> System.Func<string!, string!>!
+Touchstone.Cli.ConsoleRunnerOptions.Redact.set -> void
+Touchstone.Cli.ConsoleRunnerOptions.Run.get -> Touchstone.Core.TestRunOptions!
+Touchstone.Cli.ConsoleRunnerOptions.Run.set -> void
+Touchstone.Cli.ConsoleRunnerOptions.RunId.get -> string?
+Touchstone.Cli.ConsoleRunnerOptions.RunId.set -> void
+Touchstone.Cli.ConsoleRunnerOptions.ShowHelp.get -> bool
+Touchstone.Cli.ConsoleRunnerOptions.ShowHelp.set -> void
+Touchstone.Cli.ConsoleRunnerOptions.UseColor.get -> bool?
+Touchstone.Cli.ConsoleRunnerOptions.UseColor.set -> void
+Touchstone.Cli.ConsoleRunnerOptions.Writer.get -> System.IO.TextWriter?
+Touchstone.Cli.ConsoleRunnerOptions.Writer.set -> void
+Touchstone.Cli.HtmlReport
+Touchstone.Cli.JsonReport
+Touchstone.Cli.ReportOptions
+Touchstone.Cli.ReportOptions.Redact.get -> System.Func<string!, string!>!
+Touchstone.Cli.ReportOptions.Redact.set -> void
+Touchstone.Cli.ReportOptions.ReportOptions() -> void
+Touchstone.Cli.ReportOptions.RunId.get -> string!
+Touchstone.Cli.ReportOptions.RunId.set -> void
+Touchstone.Cli.ReportOptions.StartedUtc.get -> System.DateTimeOffset?
+Touchstone.Cli.ReportOptions.StartedUtc.set -> void

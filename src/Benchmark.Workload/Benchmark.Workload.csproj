@@ -3,8 +3,6 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>Touchstone.Benchmark.Workload</AssemblyName>
     <IsPackable>false</IsPackable>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>disable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Touchstone.Core/Touchstone.Core.csproj" />

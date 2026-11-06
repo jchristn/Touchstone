@@ -1,8 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>disable</ImplicitUsings>
+    <TouchstoneShipping>true</TouchstoneShipping>
     <Description>NUnit adapter for Touchstone. Run shared test descriptors under NUnit using TestCaseSource or single-test patterns.</Description>
     <PackageTags>testing;nunit;test-adapter;descriptors</PackageTags>
     <IsPackable>true</IsPackable>
@@ -14,6 +13,10 @@
 
   <ItemGroup>
     <PackageReference Include="NUnit" Version="5.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Touchstone.AdapterShared\CaseIndex.cs" Link="Shared\CaseIndex.cs" />
   </ItemGroup>
 
   <ItemGroup>

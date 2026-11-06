@@ -1,20 +1,34 @@
 name: Verify
+
 on:
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
+  workflow_call:
   workflow_dispatch:
     inputs:
       benchmark:
         description: Run the benchmark gate on the dedicated touchstone-benchmark runner
         type: boolean
         default: false
+
 jobs:
   test:
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: windows-latest
+            rid: win-x64
+          - os: macos-latest
+            rid: osx-arm64
     runs-on: ${{ matrix.os }}
+    env:
+      DOTNET_NOLOGO: true
+      ContinuousIntegrationBuild: true
+      RESULTS: ${{ github.workspace }}/results
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -22,13 +36,50 @@ jobs:
           dotnet-version: |
             8.0.x
             10.0.x
-      - run: dotnet build Touchstone.slnx -c Release
-      - run: dotnet run --project src/Test.Automated -c Release -f net8.0 --no-build
-      - run: dotnet run --project src/Test.Automated -c Release -f net10.0 --no-build
-      - run: dotnet test Touchstone.slnx -c Release --no-build
-      - run: dotnet run --project tests/Touchstone.SampleApp.Tests.Console -c Release --no-build
-      - run: python benchmarks/verify-gate.py
-      - run: dotnet pack Touchstone.slnx -c Release --no-build
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Prepare results directory
+        shell: bash
+        run: mkdir -p "$RESULTS"
+
+      - name: Build (0 warnings; public API analyzer enabled)
+        run: dotnet build Touchstone.slnx -c Release
+
+      - name: Test.Automated (net8.0)
+        run: dotnet run --project src/Test.Automated -c Release -f net8.0 --no-build -- --no-color --results "${{ env.RESULTS }}/automated-net8.0.json"
+      - name: Test.Automated (net10.0)
+        run: dotnet run --project src/Test.Automated -c Release -f net10.0 --no-build -- --no-color --results "${{ env.RESULTS }}/automated-net10.0.json"
+      - name: Native hosts and sample hosts (xUnit v2, xUnit v3, NUnit, MSTest)
+        run: python scripts/run-native-hosts.py --results-directory "${{ env.RESULTS }}/trx"
+      - name: Sample console host
+        run: dotnet run --project test/Touchstone.SampleApp.Tests.Console -c Release --no-build -- --no-color --results "${{ env.RESULTS }}/sample-console.json"
+
+      - name: Native AOT host and console exit codes
+        run: python scripts/verify-hosts.py --rid ${{ matrix.rid }} --results "${{ env.RESULTS }}/hosts.json"
+      - name: Native outcome parity across adapters
+        run: python scripts/verify-parity.py --results "${{ env.RESULTS }}/parity.json"
+      - name: Package inspection and consumer smoke tests
+        run: python scripts/smoke-packages.py --results "${{ env.RESULTS }}/smoke.json"
+      - name: Documentation, samples, and benchmark checks
+        run: python scripts/verify-docs.py --results "${{ env.RESULTS }}/docs.json"
+      - name: Benchmark comparison gate logic
+        run: python benchmarks/verify-gate.py
+
+      - name: Test catalog coverage (V1.0_PLAN.md section 11)
+        shell: bash
+        run: |
+          python scripts/verify-catalog.py --require-all --trx "$RESULTS/trx" \
+            "$RESULTS/automated-net8.0.json" "$RESULTS/automated-net10.0.json" \
+            "$RESULTS/hosts.json" "$RESULTS/parity.json" "$RESULTS/smoke.json" "$RESULTS/docs.json"
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-${{ matrix.os }}
+          path: ${{ env.RESULTS }}
+
   benchmark:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.benchmark }}
     runs-on: [self-hosted, touchstone-benchmark]

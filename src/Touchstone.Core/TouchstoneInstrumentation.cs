@@ -5,6 +5,7 @@ namespace Touchstone.Core
     using System.Collections.Generic;
     using System.Diagnostics;
     using System.Diagnostics.Metrics;
+    using System.Globalization;
     using System.Reflection;
 
     /// <summary>
@@ -40,6 +41,8 @@ namespace Touchstone.Core
             TouchstoneTelemetry.Cases, "{case}", "Test case results by suite and outcome.");
         private static readonly UpDownCounter<long> _CasesActive = _Meter.CreateUpDownCounter<long>(
             TouchstoneTelemetry.CasesActive, "{case}", "Test cases currently executing.");
+        private static readonly Counter<long> _CasesFiltered = _Meter.CreateCounter<long>(
+            TouchstoneTelemetry.CasesFiltered, "{case}", "Cases excluded by the filter or by SkipBehavior.Omit.");
         private static readonly Histogram<double> _SinkDuration = _Meter.CreateHistogram<double>(
             TouchstoneTelemetry.SinkDuration, "s", "Duration of a result sink callback.");
         private static readonly Counter<long> _SinkEvents = _Meter.CreateCounter<long>(
@@ -65,6 +68,16 @@ namespace Touchstone.Core
             get { return _Version; }
         }
 
+        internal static ActivitySource Source
+        {
+            get { return _Source; }
+        }
+
+        internal static Meter Meter
+        {
+            get { return _Meter; }
+        }
+
         internal static Activity? StartRun(int suiteCount)
         {
             try
@@ -75,6 +88,7 @@ namespace Touchstone.Core
             }
             catch
             {
+                // Telemetry must never change test outcomes.
                 return null;
             }
         }
@@ -96,6 +110,7 @@ namespace Touchstone.Core
             }
             catch
             {
+                // Telemetry must never change test outcomes.
             }
 
             FinishSpan(activity, SummaryOutcome(summary, exception), exception, summary);
@@ -105,7 +120,7 @@ namespace Touchstone.Core
         {
             try
             {
-                Activity? activity = _Source.StartActivity(TouchstoneTelemetry.SuiteSpanPrefix + suite.SuiteId, ActivityKind.Internal);
+                Activity? activity = _Source.StartActivity(TouchstoneTelemetry.SuiteSpanName, ActivityKind.Internal);
                 if (activity != null)
                 {
                     activity.SetTag(TouchstoneTelemetry.AttributeSuiteId, suite.SuiteId);
@@ -117,6 +132,7 @@ namespace Touchstone.Core
             }
             catch
             {
+                // Telemetry must never change test outcomes.
                 return null;
             }
         }
@@ -136,6 +152,7 @@ namespace Touchstone.Core
             }
             catch
             {
+                // Telemetry must never change test outcomes.
             }
 
             FinishSpan(activity, SummaryOutcome(summary, exception), exception, summary);
@@ -145,12 +162,14 @@ namespace Touchstone.Core
         {
             try
             {
-                Activity? activity = _Source.StartActivity(TouchstoneTelemetry.StageSpanPrefix + stage, ActivityKind.Internal);
+                Activity? activity = _Source.StartActivity(TouchstoneTelemetry.StageSpanName, ActivityKind.Internal);
                 activity?.SetTag(TouchstoneTelemetry.AttributeSuiteId, suiteId);
+                activity?.SetTag(TouchstoneTelemetry.LabelStage, stage);
                 return activity;
             }
             catch
             {
+                // Telemetry must never change test outcomes.
                 return null;
             }
         }
@@ -171,6 +190,7 @@ namespace Touchstone.Core
             }
             catch
             {
+                // Telemetry must never change test outcomes.
             }
 
             FinishSpan(activity, exception == null ? TouchstoneTelemetry.OutcomeOk : TouchstoneTelemetry.OutcomeFailed, exception, null);
@@ -180,7 +200,7 @@ namespace Touchstone.Core
         {
             try
             {
-                Activity? activity = _Source.StartActivity(TouchstoneTelemetry.CaseSpanPrefix + testCase.TestId, ActivityKind.Internal);
+                Activity? activity = _Source.StartActivity(TouchstoneTelemetry.CaseSpanName, ActivityKind.Internal);
                 if (activity != null)
                 {
                     activity.SetTag(TouchstoneTelemetry.AttributeSuiteId, testCase.SuiteId);
@@ -196,7 +216,7 @@ namespace Touchstone.Core
                         activity.SetTag(TouchstoneTelemetry.AttributeCaseTags, caseTags);
                     }
 
-                    if (testCase.Skip && testCase.SkipReason != null)
+                    if (testCase.SkipReason != null)
                         activity.SetTag(TouchstoneTelemetry.AttributeSkipReason, testCase.SkipReason);
                 }
 
@@ -204,6 +224,7 @@ namespace Touchstone.Core
             }
             catch
             {
+                // Telemetry must never change test outcomes.
                 return null;
             }
         }
@@ -216,6 +237,7 @@ namespace Touchstone.Core
             }
             catch
             {
+                // Telemetry must never change test outcomes.
             }
         }
 
@@ -236,21 +258,50 @@ namespace Touchstone.Core
             }
             catch
             {
+                // Telemetry must never change test outcomes.
             }
 
             FinishSpan(activity, outcome, exception, null);
+        }
+
+        internal static void RecordFiltered(string suiteId, int count)
+        {
+            try
+            {
+                _CasesFiltered.Add(count, SuiteTags(suiteId));
+            }
+            catch
+            {
+                // Telemetry must never change test outcomes.
+            }
+        }
+
+        internal static void RecordNotRun(string suiteId)
+        {
+            try
+            {
+                TagList tags = SuiteTags(suiteId);
+                tags.Add(TouchstoneTelemetry.LabelOutcome, TouchstoneTelemetry.OutcomeNotRun);
+                _Cases.Add(1, tags);
+            }
+            catch
+            {
+                // Telemetry must never change test outcomes.
+            }
         }
 
         internal static Activity? StartSink(string suiteId, string sinkEvent)
         {
             try
             {
-                Activity? activity = _Source.StartActivity(TouchstoneTelemetry.SinkSpanPrefix + sinkEvent, ActivityKind.Internal);
-                activity?.SetTag(TouchstoneTelemetry.AttributeSuiteId, suiteId);
+                Activity? activity = _Source.StartActivity(TouchstoneTelemetry.SinkSpanName, ActivityKind.Internal);
+                if (!string.IsNullOrEmpty(suiteId)) activity?.SetTag(TouchstoneTelemetry.AttributeSuiteId, suiteId);
+                activity?.SetTag(TouchstoneTelemetry.LabelEvent, sinkEvent);
                 return activity;
             }
             catch
             {
+                // Telemetry must never change test outcomes.
                 return null;
             }
         }
@@ -273,6 +324,7 @@ namespace Touchstone.Core
             }
             catch
             {
+                // Telemetry must never change test outcomes.
             }
 
             FinishSpan(activity, exception == null ? TouchstoneTelemetry.OutcomeOk : TouchstoneTelemetry.OutcomeFailed, exception, null);
@@ -314,6 +366,9 @@ namespace Touchstone.Core
                     activity.SetTag(TouchstoneTelemetry.AttributePassedCount, summary.Passed);
                     activity.SetTag(TouchstoneTelemetry.AttributeFailedCount, summary.Failed);
                     activity.SetTag(TouchstoneTelemetry.AttributeSkippedCount, summary.Skipped);
+                    activity.SetTag(TouchstoneTelemetry.AttributeCanceledCount, summary.Canceled);
+                    activity.SetTag(TouchstoneTelemetry.AttributeNotRunCount, summary.NotRun);
+                    activity.SetTag(TouchstoneTelemetry.AttributeFilteredCount, summary.Filtered);
                 }
 
                 activity.SetTag(TouchstoneTelemetry.AttributeOutcome, outcome);
@@ -324,9 +379,9 @@ namespace Touchstone.Core
                     AddExceptionEvent(activity, exception);
                     activity.SetStatus(ActivityStatusCode.Error, Truncate(exception.Message));
                 }
-                else if (outcome == TouchstoneTelemetry.OutcomeFailed && summary != null)
+                else if (summary != null && !summary.IsSuccess && !summary.WasCanceled)
                 {
-                    activity.SetStatus(ActivityStatusCode.Error, summary.Failed.ToString() + " test(s) failed");
+                    activity.SetStatus(ActivityStatusCode.Error, "The run did not succeed: " + summary.Failed.ToString(CultureInfo.InvariantCulture) + " failed case(s), " + summary.LifecycleErrors.Count.ToString(CultureInfo.InvariantCulture) + " suite hook error(s).");
                 }
                 else
                 {
@@ -335,6 +390,7 @@ namespace Touchstone.Core
             }
             catch
             {
+                // Telemetry must never change test outcomes.
             }
 
             try
@@ -351,7 +407,7 @@ namespace Touchstone.Core
 
         private static void RecordError(string stage, string? suiteId, Exception? exception)
         {
-            TagList tags = suiteId == null ? new TagList() : SuiteTags(suiteId);
+            TagList tags = string.IsNullOrEmpty(suiteId) ? new TagList() : SuiteTags(suiteId);
             tags.Add(TouchstoneTelemetry.LabelStage, stage);
             tags.Add(TouchstoneTelemetry.LabelErrorType, ErrorType(exception));
             _Errors.Add(1, tags);
@@ -359,8 +415,8 @@ namespace Touchstone.Core
 
         private static string SummaryOutcome(TestRunSummary summary, Exception? exception)
         {
-            if (exception is OperationCanceledException) return TouchstoneTelemetry.OutcomeCanceled;
-            if (exception != null) return TouchstoneTelemetry.OutcomeError;
+            if (exception is OperationCanceledException || summary.WasCanceled) return TouchstoneTelemetry.OutcomeCanceled;
+            if (exception != null || summary.LifecycleErrors.Count > 0) return TouchstoneTelemetry.OutcomeError;
             return summary.IsSuccess ? TouchstoneTelemetry.OutcomePassed : TouchstoneTelemetry.OutcomeFailed;
         }
 
@@ -420,6 +476,7 @@ namespace Touchstone.Core
             }
             catch
             {
+                // Version lookup is informational only.
                 return "unknown";
             }
         }

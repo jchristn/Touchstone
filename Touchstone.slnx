@@ -5,21 +5,29 @@
     <Project Path="src/Test.Benchmark/Test.Benchmark.csproj" />
     <Project Path="src/Test.Mstest/Test.Mstest.csproj" />
     <Project Path="src/Test.Nunit/Test.Nunit.csproj" />
+    <Project Path="src/Test.Shared.Mstest/Test.Shared.Mstest.csproj" />
+    <Project Path="src/Test.Shared.Nunit/Test.Shared.Nunit.csproj" />
+    <Project Path="src/Test.Shared.Reflection/Test.Shared.Reflection.csproj" />
+    <Project Path="src/Test.Shared.Xunit2/Test.Shared.Xunit2.csproj" />
+    <Project Path="src/Test.Shared.Xunit3/Test.Shared.Xunit3.csproj" />
     <Project Path="src/Test.Shared/Test.Shared.csproj" />
-    <Project Path="src/Test.Xunit/Test.Xunit.csproj" />
+    <Project Path="src/Test.Xunit2/Test.Xunit2.csproj" />
+    <Project Path="src/Test.Xunit3/Test.Xunit3.csproj" />
     <Project Path="src/Touchstone.Cli/Touchstone.Cli.csproj" />
     <Project Path="src/Touchstone.Core/Touchstone.Core.csproj" />
     <Project Path="src/Touchstone.MstestAdapter/Touchstone.MstestAdapter.csproj" />
     <Project Path="src/Touchstone.NunitAdapter/Touchstone.NunitAdapter.csproj" />
     <Project Path="src/Touchstone.SampleApp/Touchstone.SampleApp.csproj" />
-    <Project Path="src/Touchstone.XunitAdapter/Touchstone.XunitAdapter.csproj" />
+    <Project Path="src/Touchstone.Xunit3Adapter/Touchstone.Xunit3Adapter.csproj" />
+    <Project Path="src/Touchstone.Xunit2Adapter/Touchstone.Xunit2Adapter.csproj" />
     <Project Path="src/Touchstone/Touchstone.csproj" />
   </Folder>
-  <Folder Name="/tests/">
-    <Project Path="tests/Touchstone.SampleApp.Tests.Console/Touchstone.SampleApp.Tests.Console.csproj" />
-    <Project Path="tests/Touchstone.SampleApp.Tests.Mstest/Touchstone.SampleApp.Tests.Mstest.csproj" />
-    <Project Path="tests/Touchstone.SampleApp.Tests.Nunit/Touchstone.SampleApp.Tests.Nunit.csproj" />
-    <Project Path="tests/Touchstone.SampleApp.Tests.Shared/Touchstone.SampleApp.Tests.Shared.csproj" />
-    <Project Path="tests/Touchstone.SampleApp.Tests.Xunit/Touchstone.SampleApp.Tests.Xunit.csproj" />
+  <Folder Name="/test/">
+    <Project Path="test/Touchstone.SampleApp.Tests.Console/Touchstone.SampleApp.Tests.Console.csproj" />
+    <Project Path="test/Touchstone.SampleApp.Tests.Mstest/Touchstone.SampleApp.Tests.Mstest.csproj" />
+    <Project Path="test/Touchstone.SampleApp.Tests.Nunit/Touchstone.SampleApp.Tests.Nunit.csproj" />
+    <Project Path="test/Touchstone.SampleApp.Tests.Shared/Touchstone.SampleApp.Tests.Shared.csproj" />
+    <Project Path="test/Touchstone.SampleApp.Tests.Xunit2/Touchstone.SampleApp.Tests.Xunit2.csproj" />
+    <Project Path="test/Touchstone.SampleApp.Tests.Xunit3/Touchstone.SampleApp.Tests.Xunit3.csproj" />
   </Folder>
 </Solution>

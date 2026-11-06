@@ -2,31 +2,36 @@ namespace Test.Mstest
 {
     using System.Collections.Generic;
     using System.Threading.Tasks;
+
     using Microsoft.VisualStudio.TestTools.UnitTesting;
-    using Test.Shared;
     using Touchstone.Core;
     using Touchstone.MstestAdapter;
 
     /// <summary>
-    /// Runs every shared descriptor inside a single MSTest test method.
+    /// Runs every case inside one MSTest test.
     /// </summary>
     [TestClass]
-    public sealed class TouchstoneMstestFactTests : TouchstoneMstestBase
+    public sealed class TouchstoneMstestFactTests : TouchstoneMstestFactBase
     {
+        /// <summary>
+        /// The running test's context, set by MSTest.
+        /// </summary>
+        public TestContext TestContext { get; set; } = null!;
+
         /// <inheritdoc />
         protected override IReadOnlyList<TestSuiteDescriptor> Suites
         {
-            get { return TouchstoneSuites.All; }
+            get { return new HostSuites().Suites; }
         }
 
         /// <summary>
-        /// Run all shared descriptors.
+        /// Run every suite.
         /// </summary>
-        /// <returns>Task.</returns>
+        /// <returns>A task that completes when every case passed.</returns>
         [TestMethod]
-        public async Task RunAll()
+        public Task RunAll()
         {
-            await RunAllAsync().ConfigureAwait(false);
+            return RunAllAsync(TestContext.CancellationToken);
         }
     }
 }

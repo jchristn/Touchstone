@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Smoke.Shared\Smoke.Shared.csproj" />
+    <PackageReference Include="Touchstone" Version="$(TouchstoneVersion)" />
+  </ItemGroup>
+
+</Project>

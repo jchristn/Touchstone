@@ -1,8 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>disable</ImplicitUsings>
+    <TouchstoneShipping>true</TouchstoneShipping>
     <Description>MSTest adapter for Touchstone. Run shared test descriptors under MSTest using DynamicData or single-test patterns.</Description>
     <PackageTags>testing;mstest;test-adapter;descriptors</PackageTags>
     <IsPackable>true</IsPackable>
@@ -14,6 +13,10 @@
 
   <ItemGroup>
     <PackageReference Include="MSTest.TestFramework" Version="4.4.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Touchstone.AdapterShared\CaseIndex.cs" Link="Shared\CaseIndex.cs" />
   </ItemGroup>
 
   <ItemGroup>

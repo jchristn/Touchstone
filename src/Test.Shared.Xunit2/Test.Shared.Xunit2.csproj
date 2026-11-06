@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+
+  <!-- xUnit v2 adapter contract suites. Consumed only by Test.Xunit2, because xUnit v2 and v3 cannot share a project. -->
+  <ItemGroup>
+    <PackageReference Include="xunit.extensibility.execution" Version="2.9.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Test.Shared\Test.Shared.csproj" />
+    <ProjectReference Include="..\Test.Shared.Reflection\Test.Shared.Reflection.csproj" />
+    <ProjectReference Include="..\Touchstone.Xunit2Adapter\Touchstone.Xunit2Adapter.csproj" />
+  </ItemGroup>
+
+</Project>

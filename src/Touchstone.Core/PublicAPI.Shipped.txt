@@ -1,0 +1,262 @@
+#nullable enable
+const Touchstone.Core.TouchstoneTelemetry.ActivitySourceName = "Touchstone" -> string!
+const Touchstone.Core.TouchstoneTelemetry.AttributeCanceledCount = "touchstone.canceled_count" -> string!
+const Touchstone.Core.TouchstoneTelemetry.AttributeCaseCount = "touchstone.case.count" -> string!
+const Touchstone.Core.TouchstoneTelemetry.AttributeCaseDisplayName = "touchstone.case.display_name" -> string!
+const Touchstone.Core.TouchstoneTelemetry.AttributeCaseId = "touchstone.case.id" -> string!
+const Touchstone.Core.TouchstoneTelemetry.AttributeCaseTags = "touchstone.case.tags" -> string!
+const Touchstone.Core.TouchstoneTelemetry.AttributeFailedCount = "touchstone.failed_count" -> string!
+const Touchstone.Core.TouchstoneTelemetry.AttributeFilteredCount = "touchstone.filtered_count" -> string!
+const Touchstone.Core.TouchstoneTelemetry.AttributeNotRunCount = "touchstone.not_run_count" -> string!
+const Touchstone.Core.TouchstoneTelemetry.AttributeOutcome = "touchstone.outcome" -> string!
+const Touchstone.Core.TouchstoneTelemetry.AttributePassedCount = "touchstone.passed_count" -> string!
+const Touchstone.Core.TouchstoneTelemetry.AttributeResultCount = "touchstone.export.result_count" -> string!
+const Touchstone.Core.TouchstoneTelemetry.AttributeSkippedCount = "touchstone.skipped_count" -> string!
+const Touchstone.Core.TouchstoneTelemetry.AttributeSkipReason = "touchstone.case.skip_reason" -> string!
+const Touchstone.Core.TouchstoneTelemetry.AttributeStepKind = "touchstone.step.kind" -> string!
+const Touchstone.Core.TouchstoneTelemetry.AttributeSuiteCount = "touchstone.suite.count" -> string!
+const Touchstone.Core.TouchstoneTelemetry.AttributeSuiteDisplayName = "touchstone.suite.display_name" -> string!
+const Touchstone.Core.TouchstoneTelemetry.AttributeSuiteId = "touchstone.suite.id" -> string!
+const Touchstone.Core.TouchstoneTelemetry.AttributeTestId = "touchstone.test.id" -> string!
+const Touchstone.Core.TouchstoneTelemetry.BuildInfo = "touchstone.build.info" -> string!
+const Touchstone.Core.TouchstoneTelemetry.CaseDuration = "touchstone.case.duration" -> string!
+const Touchstone.Core.TouchstoneTelemetry.Cases = "touchstone.cases" -> string!
+const Touchstone.Core.TouchstoneTelemetry.CasesActive = "touchstone.cases.active" -> string!
+const Touchstone.Core.TouchstoneTelemetry.CasesFiltered = "touchstone.cases.filtered" -> string!
+const Touchstone.Core.TouchstoneTelemetry.CaseSpanName = "touchstone.case" -> string!
+const Touchstone.Core.TouchstoneTelemetry.Errors = "touchstone.errors" -> string!
+const Touchstone.Core.TouchstoneTelemetry.EventCaseCompleted = "case_completed" -> string!
+const Touchstone.Core.TouchstoneTelemetry.EventCaseStarted = "case_started" -> string!
+const Touchstone.Core.TouchstoneTelemetry.EventRunCompleted = "run_completed" -> string!
+const Touchstone.Core.TouchstoneTelemetry.EventRunStarted = "run_started" -> string!
+const Touchstone.Core.TouchstoneTelemetry.EventSuiteCompleted = "suite_completed" -> string!
+const Touchstone.Core.TouchstoneTelemetry.EventSuiteStarted = "suite_started" -> string!
+const Touchstone.Core.TouchstoneTelemetry.ExportDuration = "touchstone.export.duration" -> string!
+const Touchstone.Core.TouchstoneTelemetry.Exports = "touchstone.exports" -> string!
+const Touchstone.Core.TouchstoneTelemetry.ExportSpanName = "touchstone.export" -> string!
+const Touchstone.Core.TouchstoneTelemetry.LabelErrorType = "error.type" -> string!
+const Touchstone.Core.TouchstoneTelemetry.LabelEvent = "event" -> string!
+const Touchstone.Core.TouchstoneTelemetry.LabelFormat = "format" -> string!
+const Touchstone.Core.TouchstoneTelemetry.LabelKind = "kind" -> string!
+const Touchstone.Core.TouchstoneTelemetry.LabelOperation = "operation" -> string!
+const Touchstone.Core.TouchstoneTelemetry.LabelOutcome = "outcome" -> string!
+const Touchstone.Core.TouchstoneTelemetry.LabelStage = "stage" -> string!
+const Touchstone.Core.TouchstoneTelemetry.LabelSuite = "suite" -> string!
+const Touchstone.Core.TouchstoneTelemetry.LabelVersion = "version" -> string!
+const Touchstone.Core.TouchstoneTelemetry.MeterName = "Touchstone" -> string!
+const Touchstone.Core.TouchstoneTelemetry.OutcomeCanceled = "canceled" -> string!
+const Touchstone.Core.TouchstoneTelemetry.OutcomeError = "error" -> string!
+const Touchstone.Core.TouchstoneTelemetry.OutcomeFailed = "failed" -> string!
+const Touchstone.Core.TouchstoneTelemetry.OutcomeNotRun = "not_run" -> string!
+const Touchstone.Core.TouchstoneTelemetry.OutcomeOk = "ok" -> string!
+const Touchstone.Core.TouchstoneTelemetry.OutcomePassed = "passed" -> string!
+const Touchstone.Core.TouchstoneTelemetry.OutcomeSkipped = "skipped" -> string!
+const Touchstone.Core.TouchstoneTelemetry.RunDuration = "touchstone.run.duration" -> string!
+const Touchstone.Core.TouchstoneTelemetry.RunLastSuccessTime = "touchstone.run.last_success_time" -> string!
+const Touchstone.Core.TouchstoneTelemetry.Runs = "touchstone.runs" -> string!
+const Touchstone.Core.TouchstoneTelemetry.RunSpanName = "touchstone.run" -> string!
+const Touchstone.Core.TouchstoneTelemetry.ScenarioCleanupSpanName = "touchstone.scenario.cleanup" -> string!
+const Touchstone.Core.TouchstoneTelemetry.ScenarioContextSpanName = "touchstone.scenario.context" -> string!
+const Touchstone.Core.TouchstoneTelemetry.ScenarioOperationCleanup = "cleanup" -> string!
+const Touchstone.Core.TouchstoneTelemetry.ScenarioOperationContext = "context" -> string!
+const Touchstone.Core.TouchstoneTelemetry.ScenarioOperationDuration = "touchstone.scenario.operation.duration" -> string!
+const Touchstone.Core.TouchstoneTelemetry.ScenarioOperations = "touchstone.scenario.operations" -> string!
+const Touchstone.Core.TouchstoneTelemetry.ScenarioOperationStep = "step" -> string!
+const Touchstone.Core.TouchstoneTelemetry.ScenarioStepSpanName = "touchstone.scenario.step" -> string!
+const Touchstone.Core.TouchstoneTelemetry.SinkDuration = "touchstone.sink.duration" -> string!
+const Touchstone.Core.TouchstoneTelemetry.SinkEvents = "touchstone.sink.events" -> string!
+const Touchstone.Core.TouchstoneTelemetry.SinkSpanName = "touchstone.sink" -> string!
+const Touchstone.Core.TouchstoneTelemetry.StageAfterSuite = "after_suite" -> string!
+const Touchstone.Core.TouchstoneTelemetry.StageBeforeSuite = "before_suite" -> string!
+const Touchstone.Core.TouchstoneTelemetry.StageCase = "case" -> string!
+const Touchstone.Core.TouchstoneTelemetry.StageDuration = "touchstone.stage.duration" -> string!
+const Touchstone.Core.TouchstoneTelemetry.StageRun = "run" -> string!
+const Touchstone.Core.TouchstoneTelemetry.Stages = "touchstone.stages" -> string!
+const Touchstone.Core.TouchstoneTelemetry.StageSink = "sink" -> string!
+const Touchstone.Core.TouchstoneTelemetry.StageSpanName = "touchstone.stage" -> string!
+const Touchstone.Core.TouchstoneTelemetry.SuiteDuration = "touchstone.suite.duration" -> string!
+const Touchstone.Core.TouchstoneTelemetry.SuiteLastSuccessTime = "touchstone.suite.last_success_time" -> string!
+const Touchstone.Core.TouchstoneTelemetry.Suites = "touchstone.suites" -> string!
+const Touchstone.Core.TouchstoneTelemetry.SuiteSpanName = "touchstone.suite" -> string!
+override Touchstone.Core.SuiteLifecycleError.ToString() -> string!
+override Touchstone.Core.TestCaseDescriptor.ToString() -> string!
+override Touchstone.Core.TestResult.ToString() -> string!
+override Touchstone.Core.TestSuiteDescriptor.ToString() -> string!
+static Touchstone.Core.ScenarioDiagnostics.ExecuteAsync(Touchstone.Core.TestCaseDescriptor! testCase, System.Action<string!>! output, Touchstone.Core.TestRunOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+static Touchstone.Core.ScenarioDiagnostics.Format(Touchstone.Core.TestResult! result) -> string!
+static Touchstone.Core.ScenarioExamples.Expand<T>(System.Collections.Generic.IReadOnlyList<Touchstone.Core.ScenarioExample<T>!>! examples, System.Func<Touchstone.Core.ScenarioExample<T>!, Touchstone.Core.TestCaseDescriptor!>! factory) -> System.Collections.Generic.IReadOnlyList<Touchstone.Core.TestCaseDescriptor!>!
+static Touchstone.Core.TestExecutor.ExecuteCaseAsync(Touchstone.Core.TestCaseDescriptor! testCase, Touchstone.Core.TestRunOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+static Touchstone.Core.TestExecutor.ExecuteCaseResultAsync(Touchstone.Core.TestCaseDescriptor! testCase, Touchstone.Core.ITestResultSink? sink = null, Touchstone.Core.TestRunOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Touchstone.Core.TestResult!>!
+static Touchstone.Core.TestExecutor.RunAsync(System.Collections.Generic.IReadOnlyList<Touchstone.Core.TestSuiteDescriptor!>! suites, Touchstone.Core.ITestResultSink? sink = null, Touchstone.Core.TestRunOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Touchstone.Core.TestRunSummary!>!
+static Touchstone.Core.TestExecutor.RunSuiteAsync(Touchstone.Core.TestSuiteDescriptor! suite, Touchstone.Core.ITestResultSink? sink = null, Touchstone.Core.TestRunOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Touchstone.Core.TestRunSummary!>!
+static Touchstone.Core.TestRunAssert.CreateFailure(Touchstone.Core.TestRunSummary! summary, System.Collections.Generic.IReadOnlyList<Touchstone.Core.TestResult!>! results) -> System.AggregateException?
+static Touchstone.Core.TestRunAssert.ThrowIfNotPassed(Touchstone.Core.TestResult! result, System.Threading.CancellationToken cancellationToken) -> void
+static Touchstone.Core.TestRunAssert.ThrowIfUnsuccessful(Touchstone.Core.TestRunSummary! summary, System.Collections.Generic.IReadOnlyList<Touchstone.Core.TestResult!>! results, System.Threading.CancellationToken cancellationToken) -> void
+static Touchstone.Core.TouchstoneTelemetry.SuiteLabelEnabled.get -> bool
+static Touchstone.Core.TouchstoneTelemetry.SuiteLabelEnabled.set -> void
+Touchstone.Core.DuplicateTestIdException
+Touchstone.Core.DuplicateTestIdException.DuplicateId.get -> string!
+Touchstone.Core.DuplicateTestIdException.DuplicateTestIdException() -> void
+Touchstone.Core.DuplicateTestIdException.DuplicateTestIdException(string! duplicateId, string! message, string? paramName) -> void
+Touchstone.Core.DuplicateTestIdException.DuplicateTestIdException(string! message) -> void
+Touchstone.Core.DuplicateTestIdException.DuplicateTestIdException(string! message, System.Exception? innerException) -> void
+Touchstone.Core.ITestResultSink
+Touchstone.Core.ITestResultSink.OnCaseCompletedAsync(Touchstone.Core.TestResult! result, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Touchstone.Core.ITestResultSink.OnCaseStartedAsync(Touchstone.Core.TestCaseDescriptor! testCase, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Touchstone.Core.ITestResultSink.OnRunCompletedAsync(Touchstone.Core.TestRunSummary! summary, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Touchstone.Core.ITestResultSink.OnRunStartedAsync(System.Collections.Generic.IReadOnlyList<Touchstone.Core.TestSuiteDescriptor!>! suites, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Touchstone.Core.ITestResultSink.OnStepCompletedAsync(string! testId, Touchstone.Core.ScenarioStepResult! step, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Touchstone.Core.ITestResultSink.OnStepStartedAsync(string! testId, Touchstone.Core.ScenarioStepResult! step, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Touchstone.Core.ITestResultSink.OnSuiteCompletedAsync(Touchstone.Core.TestSuiteDescriptor! suite, Touchstone.Core.TestRunSummary! summary, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Touchstone.Core.ITestResultSink.OnSuiteStartedAsync(Touchstone.Core.TestSuiteDescriptor! suite, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Touchstone.Core.ITestSuiteProvider
+Touchstone.Core.ITestSuiteProvider.Suites.get -> System.Collections.Generic.IReadOnlyList<Touchstone.Core.TestSuiteDescriptor!>!
+Touchstone.Core.ScenarioBuilder<TContext>
+Touchstone.Core.ScenarioBuilder<TContext>.And(string! id, string! name, System.Func<TContext, System.Threading.CancellationToken, System.Threading.Tasks.Task!>! executeAsync) -> Touchstone.Core.ScenarioBuilder<TContext>!
+Touchstone.Core.ScenarioBuilder<TContext>.Build() -> Touchstone.Core.TestCaseDescriptor!
+Touchstone.Core.ScenarioBuilder<TContext>.CleanupTimeout.get -> System.TimeSpan
+Touchstone.Core.ScenarioBuilder<TContext>.CleanupTimeout.set -> void
+Touchstone.Core.ScenarioBuilder<TContext>.Given(string! id, string! name, System.Func<TContext, System.Threading.CancellationToken, System.Threading.Tasks.Task!>! executeAsync) -> Touchstone.Core.ScenarioBuilder<TContext>!
+Touchstone.Core.ScenarioBuilder<TContext>.ScenarioBuilder(string! suiteId, string! caseId, string! displayName, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<TContext>!>! createContextAsync) -> void
+Touchstone.Core.ScenarioBuilder<TContext>.Step(Touchstone.Core.ScenarioStepDescriptor<TContext>! step) -> Touchstone.Core.ScenarioBuilder<TContext>!
+Touchstone.Core.ScenarioBuilder<TContext>.Then(string! id, string! name, System.Func<TContext, System.Threading.CancellationToken, System.Threading.Tasks.Task!>! executeAsync) -> Touchstone.Core.ScenarioBuilder<TContext>!
+Touchstone.Core.ScenarioBuilder<TContext>.When(string! id, string! name, System.Func<TContext, System.Threading.CancellationToken, System.Threading.Tasks.Task!>! executeAsync) -> Touchstone.Core.ScenarioBuilder<TContext>!
+Touchstone.Core.ScenarioBuilder<TContext>.WithCleanup(System.Func<TContext, System.Threading.CancellationToken, System.Threading.Tasks.Task!>! cleanupAsync) -> Touchstone.Core.ScenarioBuilder<TContext>!
+Touchstone.Core.ScenarioBuilder<TContext>.WithMetadata(Touchstone.Core.ScenarioMetadata! metadata) -> Touchstone.Core.ScenarioBuilder<TContext>!
+Touchstone.Core.ScenarioBuilder<TContext>.WithSkip(string! reason) -> Touchstone.Core.ScenarioBuilder<TContext>!
+Touchstone.Core.ScenarioBuilder<TContext>.WithTags(System.Collections.Generic.IReadOnlyList<string!>? tags) -> Touchstone.Core.ScenarioBuilder<TContext>!
+Touchstone.Core.ScenarioDiagnostics
+Touchstone.Core.ScenarioExample<T>
+Touchstone.Core.ScenarioExample<T>.ExampleId.get -> string!
+Touchstone.Core.ScenarioExample<T>.ScenarioExample(string! exampleId, T value) -> void
+Touchstone.Core.ScenarioExample<T>.Value.get -> T
+Touchstone.Core.ScenarioExamples
+Touchstone.Core.ScenarioMetadata
+Touchstone.Core.ScenarioMetadata.ExampleId.get -> string?
+Touchstone.Core.ScenarioMetadata.Feature.get -> string!
+Touchstone.Core.ScenarioMetadata.Requirements.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Touchstone.Core.ScenarioMetadata.ScenarioMetadata(string! feature = "", System.Collections.Generic.IReadOnlyList<string!>? requirements = null, string? exampleId = null) -> void
+Touchstone.Core.ScenarioStepDescriptor<TContext>
+Touchstone.Core.ScenarioStepDescriptor<TContext>.DisplayName.get -> string!
+Touchstone.Core.ScenarioStepDescriptor<TContext>.ExecuteAsync.get -> System.Func<TContext, System.Threading.CancellationToken, System.Threading.Tasks.Task!>!
+Touchstone.Core.ScenarioStepDescriptor<TContext>.Kind.get -> Touchstone.Core.ScenarioStepKind
+Touchstone.Core.ScenarioStepDescriptor<TContext>.ScenarioStepDescriptor(string! stepId, string! displayName, Touchstone.Core.ScenarioStepKind kind, System.Func<TContext, System.Threading.CancellationToken, System.Threading.Tasks.Task!>! executeAsync) -> void
+Touchstone.Core.ScenarioStepDescriptor<TContext>.StepId.get -> string!
+Touchstone.Core.ScenarioStepKind
+Touchstone.Core.ScenarioStepKind.Given = 0 -> Touchstone.Core.ScenarioStepKind
+Touchstone.Core.ScenarioStepKind.Then = 2 -> Touchstone.Core.ScenarioStepKind
+Touchstone.Core.ScenarioStepKind.When = 1 -> Touchstone.Core.ScenarioStepKind
+Touchstone.Core.ScenarioStepOutcome
+Touchstone.Core.ScenarioStepOutcome.Canceled = 4 -> Touchstone.Core.ScenarioStepOutcome
+Touchstone.Core.ScenarioStepOutcome.Failed = 2 -> Touchstone.Core.ScenarioStepOutcome
+Touchstone.Core.ScenarioStepOutcome.NotRun = 0 -> Touchstone.Core.ScenarioStepOutcome
+Touchstone.Core.ScenarioStepOutcome.Passed = 1 -> Touchstone.Core.ScenarioStepOutcome
+Touchstone.Core.ScenarioStepOutcome.Skipped = 3 -> Touchstone.Core.ScenarioStepOutcome
+Touchstone.Core.ScenarioStepResult
+Touchstone.Core.ScenarioStepResult.DisplayName.get -> string!
+Touchstone.Core.ScenarioStepResult.Duration.get -> System.TimeSpan
+Touchstone.Core.ScenarioStepResult.Exception.get -> System.Exception?
+Touchstone.Core.ScenarioStepResult.Kind.get -> Touchstone.Core.ScenarioStepKind
+Touchstone.Core.ScenarioStepResult.Message.get -> string?
+Touchstone.Core.ScenarioStepResult.Outcome.get -> Touchstone.Core.ScenarioStepOutcome
+Touchstone.Core.ScenarioStepResult.ScenarioStepResult(string! stepId, string! displayName, Touchstone.Core.ScenarioStepKind kind, Touchstone.Core.ScenarioStepOutcome outcome, System.TimeSpan duration, System.Exception? exception = null, string? message = null) -> void
+Touchstone.Core.ScenarioStepResult.StepId.get -> string!
+Touchstone.Core.SkipBehavior
+Touchstone.Core.SkipBehavior.Fail = 2 -> Touchstone.Core.SkipBehavior
+Touchstone.Core.SkipBehavior.Omit = 1 -> Touchstone.Core.SkipBehavior
+Touchstone.Core.SkipBehavior.Report = 0 -> Touchstone.Core.SkipBehavior
+Touchstone.Core.SkippedCaseNotAllowedException
+Touchstone.Core.SkippedCaseNotAllowedException.SkippedCaseNotAllowedException() -> void
+Touchstone.Core.SkippedCaseNotAllowedException.SkippedCaseNotAllowedException(string! message) -> void
+Touchstone.Core.SkippedCaseNotAllowedException.SkippedCaseNotAllowedException(string! message, System.Exception? innerException) -> void
+Touchstone.Core.SkippedCaseNotAllowedException.SkippedCaseNotAllowedException(string! testId, string! skipReason) -> void
+Touchstone.Core.SkippedCaseNotAllowedException.SkipReason.get -> string!
+Touchstone.Core.SkippedCaseNotAllowedException.TestId.get -> string!
+Touchstone.Core.SuiteLifecycleError
+Touchstone.Core.SuiteLifecycleError.Exception.get -> System.Exception!
+Touchstone.Core.SuiteLifecycleError.Stage.get -> string!
+Touchstone.Core.SuiteLifecycleError.SuiteId.get -> string!
+Touchstone.Core.SuiteLifecycleError.SuiteLifecycleError(string! suiteId, string! stage, System.Exception! exception) -> void
+Touchstone.Core.TestCaseDescriptor
+Touchstone.Core.TestCaseDescriptor.CaseId.get -> string!
+Touchstone.Core.TestCaseDescriptor.DisplayName.get -> string!
+Touchstone.Core.TestCaseDescriptor.IsSkipped.get -> bool
+Touchstone.Core.TestCaseDescriptor.Metadata.get -> Touchstone.Core.ScenarioMetadata?
+Touchstone.Core.TestCaseDescriptor.SkipReason.get -> string?
+Touchstone.Core.TestCaseDescriptor.SuiteId.get -> string!
+Touchstone.Core.TestCaseDescriptor.Tags.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Touchstone.Core.TestCaseDescriptor.TestCaseDescriptor(string! suiteId, string! caseId, string! displayName, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task!>! executeAsync, System.Collections.Generic.IReadOnlyList<string!>? tags = null, string? skipReason = null) -> void
+Touchstone.Core.TestCaseDescriptor.TestId.get -> string!
+Touchstone.Core.TestCaseDescriptor.WithDisplayName(string! displayName) -> Touchstone.Core.TestCaseDescriptor!
+Touchstone.Core.TestCaseDescriptor.WithoutSkip() -> Touchstone.Core.TestCaseDescriptor!
+Touchstone.Core.TestCaseDescriptor.WithSkip(string! reason) -> Touchstone.Core.TestCaseDescriptor!
+Touchstone.Core.TestCaseDescriptor.WithTags(System.Collections.Generic.IReadOnlyList<string!>? tags) -> Touchstone.Core.TestCaseDescriptor!
+Touchstone.Core.TestExecutor
+Touchstone.Core.TestFilter
+Touchstone.Core.TestFilter.ExcludeTags.get -> System.Collections.Generic.IList<string!>!
+Touchstone.Core.TestFilter.IncludeTags.get -> System.Collections.Generic.IList<string!>!
+Touchstone.Core.TestFilter.IsEmpty.get -> bool
+Touchstone.Core.TestFilter.Matches(Touchstone.Core.TestCaseDescriptor! testCase) -> bool
+Touchstone.Core.TestFilter.SuiteIds.get -> System.Collections.Generic.IList<string!>!
+Touchstone.Core.TestFilter.TestFilter() -> void
+Touchstone.Core.TestFilter.TestIds.get -> System.Collections.Generic.IList<string!>!
+Touchstone.Core.TestFilter.Validate() -> void
+Touchstone.Core.TestOutcome
+Touchstone.Core.TestOutcome.Canceled = 3 -> Touchstone.Core.TestOutcome
+Touchstone.Core.TestOutcome.Failed = 1 -> Touchstone.Core.TestOutcome
+Touchstone.Core.TestOutcome.NotRun = 4 -> Touchstone.Core.TestOutcome
+Touchstone.Core.TestOutcome.Passed = 0 -> Touchstone.Core.TestOutcome
+Touchstone.Core.TestOutcome.Skipped = 2 -> Touchstone.Core.TestOutcome
+Touchstone.Core.TestResult
+Touchstone.Core.TestResult.CaseId.get -> string!
+Touchstone.Core.TestResult.CleanupExceptions.get -> System.Collections.Generic.IReadOnlyList<System.Exception!>!
+Touchstone.Core.TestResult.DisplayName.get -> string!
+Touchstone.Core.TestResult.Duration.get -> System.TimeSpan
+Touchstone.Core.TestResult.Exception.get -> System.Exception?
+Touchstone.Core.TestResult.Message.get -> string?
+Touchstone.Core.TestResult.Metadata.get -> Touchstone.Core.ScenarioMetadata?
+Touchstone.Core.TestResult.Outcome.get -> Touchstone.Core.TestOutcome
+Touchstone.Core.TestResult.Steps.get -> System.Collections.Generic.IReadOnlyList<Touchstone.Core.ScenarioStepResult!>!
+Touchstone.Core.TestResult.SuiteId.get -> string!
+Touchstone.Core.TestResult.Tags.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Touchstone.Core.TestResult.TestId.get -> string!
+Touchstone.Core.TestResult.TestResult(string! suiteId, string! caseId, string! displayName, Touchstone.Core.TestOutcome outcome, System.TimeSpan duration, string? message = null, System.Exception? exception = null, System.Collections.Generic.IReadOnlyList<string!>? tags = null, Touchstone.Core.ScenarioMetadata? metadata = null, System.Collections.Generic.IReadOnlyList<Touchstone.Core.ScenarioStepResult!>? steps = null, System.Collections.Generic.IReadOnlyList<System.Exception!>? cleanupExceptions = null) -> void
+Touchstone.Core.TestResultCollector
+Touchstone.Core.TestResultCollector.Failures.get -> System.Collections.Generic.IReadOnlyList<Touchstone.Core.TestResult!>!
+Touchstone.Core.TestResultCollector.OnCaseCompletedAsync(Touchstone.Core.TestResult! result, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Touchstone.Core.TestResultCollector.OnRunCompletedAsync(Touchstone.Core.TestRunSummary! summary, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+Touchstone.Core.TestResultCollector.Results.get -> System.Collections.Generic.IReadOnlyList<Touchstone.Core.TestResult!>!
+Touchstone.Core.TestResultCollector.Summary.get -> Touchstone.Core.TestRunSummary?
+Touchstone.Core.TestResultCollector.TestResultCollector() -> void
+Touchstone.Core.TestRunAssert
+Touchstone.Core.TestRunOptions
+Touchstone.Core.TestRunOptions.CleanupTimeout.get -> System.TimeSpan
+Touchstone.Core.TestRunOptions.CleanupTimeout.set -> void
+Touchstone.Core.TestRunOptions.Filter.get -> Touchstone.Core.TestFilter!
+Touchstone.Core.TestRunOptions.Filter.set -> void
+Touchstone.Core.TestRunOptions.SkipBehavior.get -> Touchstone.Core.SkipBehavior
+Touchstone.Core.TestRunOptions.SkipBehavior.set -> void
+Touchstone.Core.TestRunOptions.StopOnFirstFailure.get -> bool
+Touchstone.Core.TestRunOptions.StopOnFirstFailure.set -> void
+Touchstone.Core.TestRunOptions.TestRunOptions() -> void
+Touchstone.Core.TestRunSummary
+Touchstone.Core.TestRunSummary.Canceled.get -> int
+Touchstone.Core.TestRunSummary.Duration.get -> System.TimeSpan
+Touchstone.Core.TestRunSummary.Failed.get -> int
+Touchstone.Core.TestRunSummary.Filtered.get -> int
+Touchstone.Core.TestRunSummary.IsSuccess.get -> bool
+Touchstone.Core.TestRunSummary.LifecycleErrors.get -> System.Collections.Generic.IReadOnlyList<Touchstone.Core.SuiteLifecycleError!>!
+Touchstone.Core.TestRunSummary.NotRun.get -> int
+Touchstone.Core.TestRunSummary.Passed.get -> int
+Touchstone.Core.TestRunSummary.Skipped.get -> int
+Touchstone.Core.TestRunSummary.TestRunSummary(int passed, int failed, int skipped, int canceled, int notRun, int filtered, System.TimeSpan duration, bool wasCanceled = false, System.Collections.Generic.IReadOnlyList<Touchstone.Core.SuiteLifecycleError!>? lifecycleErrors = null) -> void
+Touchstone.Core.TestRunSummary.Total.get -> int
+Touchstone.Core.TestRunSummary.WasCanceled.get -> bool
+Touchstone.Core.TestSuiteDescriptor
+Touchstone.Core.TestSuiteDescriptor.AfterSuiteAsync.get -> System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>?
+Touchstone.Core.TestSuiteDescriptor.BeforeSuiteAsync.get -> System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>?
+Touchstone.Core.TestSuiteDescriptor.Cases.get -> System.Collections.Generic.IReadOnlyList<Touchstone.Core.TestCaseDescriptor!>!
+Touchstone.Core.TestSuiteDescriptor.DisplayName.get -> string!
+Touchstone.Core.TestSuiteDescriptor.SuiteId.get -> string!
+Touchstone.Core.TestSuiteDescriptor.TestSuiteDescriptor(string! suiteId, string! displayName, System.Collections.Generic.IReadOnlyList<Touchstone.Core.TestCaseDescriptor!>! cases, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>? beforeSuiteAsync = null, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>? afterSuiteAsync = null) -> void
+Touchstone.Core.TouchstoneTelemetry

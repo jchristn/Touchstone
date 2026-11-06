@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!--
+    Reflection-based API convention checks (catalog section 11.24). They inspect shipping assemblies and their XML
+    documentation, which is not meaningful under native AOT, so Test.Aot does not reference this project. Every JIT
+    host runs these suites; README "AOT support" lists them as the only suites Test.Aot does not run.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\Test.Shared\Test.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

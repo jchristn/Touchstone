@@ -6,13 +6,13 @@ namespace Touchstone.SampleApp
     public sealed class CreateNoteRequest
     {
         /// <summary>
-        /// Note title.
+        /// Note title. Null when the client omits it.
         /// </summary>
-        public string Title { get; set; }
+        public string? Title { get; set; }
 
         /// <summary>
-        /// Note body.
+        /// Note body. Null when the client omits it.
         /// </summary>
-        public string Body { get; set; }
+        public string? Body { get; set; }
     }
 }

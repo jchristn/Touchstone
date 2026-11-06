@@ -5,6 +5,7 @@ namespace Test.Shared
     using System.Diagnostics;
     using System.Diagnostics.Metrics;
     using System.Linq;
+
     using Touchstone.Core;
 
     /// <summary>
@@ -131,6 +132,40 @@ namespace Test.Shared
             List<Activity> matches = Spans().Where(a => a.DisplayName == name).ToList();
             TestAssert.Equal(1, matches.Count, "span count for " + name);
             return matches[0];
+        }
+
+        /// <summary>
+        /// Every measurement recorded inside this capture's trace.
+        /// </summary>
+        /// <returns>The measurements.</returns>
+        public List<CapturedMeasurement> MeasurementsAll()
+        {
+            lock (_Lock)
+                return _Measurements.Where(m => m.TraceId == TraceId).ToList();
+        }
+
+        /// <summary>
+        /// The single span with the given name whose attribute has the given value.
+        /// </summary>
+        /// <param name="name">Span name.</param>
+        /// <param name="attribute">Attribute key.</param>
+        /// <param name="value">Expected attribute value.</param>
+        /// <returns>The span.</returns>
+        public Activity Span(string name, string attribute, string value)
+        {
+            List<Activity> matches = Spans().Where(a => a.DisplayName == name && a.GetTagItem(attribute)?.ToString() == value).ToList();
+            TestAssert.Equal(1, matches.Count, "span count for " + name + " " + attribute + "=" + value);
+            return matches[0];
+        }
+
+        /// <summary>
+        /// The case span of a test identity.
+        /// </summary>
+        /// <param name="testId">Test identity.</param>
+        /// <returns>The span.</returns>
+        public Activity CaseSpan(string testId)
+        {
+            return Span(TouchstoneTelemetry.CaseSpanName, TouchstoneTelemetry.AttributeTestId, testId);
         }
 
         /// <summary>

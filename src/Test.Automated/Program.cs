@@ -1,27 +1,21 @@
 namespace Test.Automated
 {
-    using System.Threading;
+    using System.Linq;
     using System.Threading.Tasks;
 
     using Test.Shared;
+    using Test.Shared.Reflection;
     using Touchstone.Cli;
 
+    /// <summary>
+    /// Console host for the Touchstone contract suites. Accepts every ConsoleRunner option, for example
+    /// <c>--results results.json --tag fast</c>.
+    /// </summary>
     internal static class Program
     {
-        private static async Task<int> Main(string[] args)
+        private static Task<int> Main(string[] args)
         {
-            string? resultsPath = null;
-            string? htmlPath = null;
-            ConsoleResultSink sink = new ConsoleResultSink();
-            for (int i = 0; i < args.Length; i++)
-            {
-                if (args[i] == "--results" && i + 1 < args.Length) resultsPath = args[++i];
-                else if (args[i] == "--html" && i + 1 < args.Length) htmlPath = args[++i];
-                else if (args[i] == "--steps") sink.ExpandSteps = true;
-            }
-            int code = await ConsoleRunner.RunAsync(TouchstoneSuites.All, sink, resultsPath, CancellationToken.None).ConfigureAwait(false);
-            if (htmlPath != null) await ScenarioHtmlReport.WriteAsync(sink.AllResults, htmlPath, "console-run", CancellationToken.None, sink.Redact).ConfigureAwait(false);
-            return code;
+            return ConsoleRunner.RunMainAsync(TouchstoneSuites.All.Concat(ReflectionSuites.All).Concat(ExitProbe.Suites()).ToList(), args);
         }
     }
 }

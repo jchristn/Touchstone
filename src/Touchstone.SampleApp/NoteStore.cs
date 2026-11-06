@@ -29,9 +29,9 @@ namespace Touchstone.SampleApp
         /// </summary>
         /// <param name="id">Note identifier.</param>
         /// <returns>The note, or null when not found.</returns>
-        public Note Get(string id)
+        public Note? Get(string id)
         {
-            _Notes.TryGetValue(id, out Note note);
+            _Notes.TryGetValue(id, out Note? note);
             return note;
         }
 

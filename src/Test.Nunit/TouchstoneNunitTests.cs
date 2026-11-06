@@ -1,34 +1,48 @@
 namespace Test.Nunit
 {
-    using System.Collections;
-    using System.Threading;
+    using System.Collections.Generic;
+    using System.Linq;
     using System.Threading.Tasks;
+
     using NUnit.Framework;
     using Test.Shared;
+    using Test.Shared.Nunit;
+    using Test.Shared.Reflection;
     using Touchstone.Core;
     using Touchstone.NunitAdapter;
 
     /// <summary>
-    /// Runs each shared descriptor as a separate NUnit test case.
+    /// Runs each case as its own NUnit test, with native names, categories, and ignores.
     /// </summary>
-    [TestFixture]
     public sealed class TouchstoneNunitTests
     {
         /// <summary>
-        /// Execute a single shared descriptor.
+        /// Every suite this host runs.
         /// </summary>
-        /// <param name="testCase">Descriptor to execute.</param>
-        /// <returns>Task.</returns>
-        [Test]
-        [TestCaseSource(nameof(TestCases))]
-        public async Task RunTest(TestCaseDescriptor testCase)
+        /// <returns>The suites.</returns>
+        public static IReadOnlyList<TestSuiteDescriptor> HostSuites()
         {
-            await ScenarioDiagnostics.ExecuteAsync(testCase, text => TestContext.Progress.WriteLine(text), CancellationToken.None).ConfigureAwait(false);
+            return TouchstoneSuites.All.Concat(ReflectionSuites.All).Concat(NunitSuites.All).ToList();
         }
 
-        private static IEnumerable TestCases()
+        /// <summary>
+        /// One entry per case.
+        /// </summary>
+        /// <returns>Test case data.</returns>
+        public static IEnumerable<TestCaseData> Cases()
         {
-            return new TouchstoneTestCaseSource(TouchstoneSuites.All);
+            return TouchstoneNunitCases.From(HostSuites());
+        }
+
+        /// <summary>
+        /// Execute one case.
+        /// </summary>
+        /// <param name="testCase">The case.</param>
+        /// <returns>A task that completes when the case passes.</returns>
+        [TestCaseSource(nameof(Cases))]
+        public Task Run(TestCaseDescriptor testCase)
+        {
+            return TouchstoneNunit.ExecuteAsync(testCase, null, null, TestContext.CurrentContext.CancellationToken);
         }
     }
 }

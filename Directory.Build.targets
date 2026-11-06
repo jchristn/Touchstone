@@ -1,0 +1,13 @@
+<Project>
+
+  <!-- Shipping packages track their public API. Set TouchstoneShipping in each packed project. -->
+  <ItemGroup Condition="'$(TouchstoneShipping)' == 'true'">
+    <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="5.6.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(TouchstoneShipping)' == 'true'">
+    <WarningsAsErrors>$(WarningsAsErrors);RS0016;RS0017;RS0026;RS0036;RS0037</WarningsAsErrors>
+    <EnablePackageValidation>true</EnablePackageValidation>
+  </PropertyGroup>
+
+</Project>

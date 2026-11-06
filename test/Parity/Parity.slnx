@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="Parity.Shared/Parity.Shared.csproj" />
+  <Project Path="Parity.Xunit2/Parity.Xunit2.csproj" />
+  <Project Path="Parity.Xunit3/Parity.Xunit3.csproj" />
+  <Project Path="Parity.Nunit/Parity.Nunit.csproj" />
+  <Project Path="Parity.Mstest/Parity.Mstest.csproj" />
+</Solution>

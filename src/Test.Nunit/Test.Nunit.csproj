@@ -1,14 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
-    <ImplicitUsings>disable</ImplicitUsings>
-    <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Test.Shared\Test.Shared.csproj" />
+    <ProjectReference Include="..\Test.Shared.Reflection\Test.Shared.Reflection.csproj" />
+    <ProjectReference Include="..\Test.Shared.Nunit\Test.Shared.Nunit.csproj" />
     <ProjectReference Include="..\Touchstone.NunitAdapter\Touchstone.NunitAdapter.csproj" />
   </ItemGroup>
 
@@ -18,10 +17,6 @@
     <PackageReference Include="NUnit" Version="5.0.0" />
     <PackageReference Include="NUnit.Analyzers" Version="4.15.0" />
     <PackageReference Include="NUnit3TestAdapter" Version="6.3.0" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Using Include="NUnit.Framework" />
   </ItemGroup>
 
 </Project>

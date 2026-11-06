@@ -4,32 +4,33 @@ namespace Test.Shared
     using System.Collections.Generic;
     using System.Threading;
     using System.Threading.Tasks;
+
     using Touchstone.Core;
 
     /// <summary>
-    /// Result sink that records every event it receives, in order, for later inspection.
+    /// Sink that records every callback, the token it received, and optionally throws on one event.
     /// </summary>
     public sealed class RecordingSink : ITestResultSink
     {
         private readonly List<string> _Events = new List<string>();
         private readonly List<TestResult> _Results = new List<TestResult>();
-        private readonly List<CancellationToken> _Tokens = new List<CancellationToken>();
-        private TestSuiteDescriptor? _StartedSuite = null;
-        private TestSuiteDescriptor? _CompletedSuite = null;
-        private TestRunSummary? _CompletedSummary = null;
-        private Action<TestResult>? _OnTestCompleted = null;
+        private readonly Dictionary<string, CancellationToken> _Tokens = new Dictionary<string, CancellationToken>(StringComparer.Ordinal);
+        private readonly string? _ThrowOn;
+        private readonly Action<string>? _OnEvent;
 
         /// <summary>
-        /// Initialize a new recording sink.
+        /// Initialize a recording sink.
         /// </summary>
-        /// <param name="onTestCompleted">Optional callback invoked for each completed test. May throw to simulate a faulty sink.</param>
-        public RecordingSink(Action<TestResult>? onTestCompleted = null)
+        /// <param name="throwOn">Event name (for example <c>case_completed</c>) that throws <see cref="InvalidOperationException"/>, or null.</param>
+        /// <param name="onEvent">Callback run for every event name before recording, or null.</param>
+        public RecordingSink(string? throwOn = null, Action<string>? onEvent = null)
         {
-            _OnTestCompleted = onTestCompleted;
+            _ThrowOn = throwOn;
+            _OnEvent = onEvent;
         }
 
         /// <summary>
-        /// Ordered event log. Entries are "start:SuiteId", "test:TestId", and "complete:SuiteId".
+        /// Every event, formatted as <c>event:identity</c>, in order.
         /// </summary>
         public IReadOnlyList<string> Events
         {
@@ -37,7 +38,7 @@ namespace Test.Shared
         }
 
         /// <summary>
-        /// Results received through <see cref="OnTestCompletedAsync"/>, in order.
+        /// Every completed case result, in order.
         /// </summary>
         public IReadOnlyList<TestResult> Results
         {
@@ -45,64 +46,81 @@ namespace Test.Shared
         }
 
         /// <summary>
-        /// Cancellation tokens received across all callbacks, in order.
+        /// The last token received per event name.
         /// </summary>
-        public IReadOnlyList<CancellationToken> Tokens
+        public IReadOnlyDictionary<string, CancellationToken> Tokens
         {
             get { return _Tokens; }
         }
 
         /// <summary>
-        /// Suite passed to the most recent <see cref="OnSuiteStartedAsync"/> call. Null when never called.
+        /// The summary received by <c>OnRunCompletedAsync</c>, or null.
         /// </summary>
-        public TestSuiteDescriptor? StartedSuite
-        {
-            get { return _StartedSuite; }
-        }
+        public TestRunSummary? RunSummary { get; private set; }
 
         /// <summary>
-        /// Suite passed to the most recent <see cref="OnSuiteCompletedAsync"/> call. Null when never called.
+        /// The summaries received by <c>OnSuiteCompletedAsync</c>, in order.
         /// </summary>
-        public TestSuiteDescriptor? CompletedSuite
-        {
-            get { return _CompletedSuite; }
-        }
+        public List<TestRunSummary> SuiteSummaries { get; } = new List<TestRunSummary>();
 
-        /// <summary>
-        /// Summary passed to the most recent <see cref="OnSuiteCompletedAsync"/> call. Null when never called.
-        /// </summary>
-        public TestRunSummary? CompletedSummary
+        /// <inheritdoc />
+        public ValueTask OnRunStartedAsync(IReadOnlyList<TestSuiteDescriptor> suites, CancellationToken cancellationToken)
         {
-            get { return _CompletedSummary; }
+            return Record(TouchstoneTelemetry.EventRunStarted, suites.Count.ToString(System.Globalization.CultureInfo.InvariantCulture), cancellationToken);
         }
 
         /// <inheritdoc />
         public ValueTask OnSuiteStartedAsync(TestSuiteDescriptor suite, CancellationToken cancellationToken)
         {
-            _StartedSuite = suite;
-            _Tokens.Add(cancellationToken);
-            _Events.Add("start:" + suite.SuiteId);
-            return ValueTask.CompletedTask;
+            return Record(TouchstoneTelemetry.EventSuiteStarted, suite.SuiteId, cancellationToken);
         }
 
         /// <inheritdoc />
-        public ValueTask OnTestCompletedAsync(TestResult result, CancellationToken cancellationToken)
+        public ValueTask OnCaseStartedAsync(TestCaseDescriptor testCase, CancellationToken cancellationToken)
+        {
+            return Record(TouchstoneTelemetry.EventCaseStarted, testCase.TestId, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public ValueTask OnStepStartedAsync(string testId, ScenarioStepResult step, CancellationToken cancellationToken)
+        {
+            return Record("step_started", testId + "/" + step.StepId, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public ValueTask OnStepCompletedAsync(string testId, ScenarioStepResult step, CancellationToken cancellationToken)
+        {
+            return Record("step_completed", testId + "/" + step.StepId + "=" + step.Outcome, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public ValueTask OnCaseCompletedAsync(TestResult result, CancellationToken cancellationToken)
         {
             _Results.Add(result);
-            _Tokens.Add(cancellationToken);
-            _Events.Add("test:" + result.TestId);
-            _OnTestCompleted?.Invoke(result);
-            return ValueTask.CompletedTask;
+            return Record(TouchstoneTelemetry.EventCaseCompleted, result.TestId + "=" + result.Outcome, cancellationToken);
         }
 
         /// <inheritdoc />
         public ValueTask OnSuiteCompletedAsync(TestSuiteDescriptor suite, TestRunSummary summary, CancellationToken cancellationToken)
         {
-            _CompletedSuite = suite;
-            _CompletedSummary = summary;
-            _Tokens.Add(cancellationToken);
-            _Events.Add("complete:" + suite.SuiteId);
-            return ValueTask.CompletedTask;
+            SuiteSummaries.Add(summary);
+            return Record(TouchstoneTelemetry.EventSuiteCompleted, suite.SuiteId, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public ValueTask OnRunCompletedAsync(TestRunSummary summary, CancellationToken cancellationToken)
+        {
+            RunSummary = summary;
+            return Record(TouchstoneTelemetry.EventRunCompleted, "run", cancellationToken);
+        }
+
+        private ValueTask Record(string name, string identity, CancellationToken cancellationToken)
+        {
+            _OnEvent?.Invoke(name);
+            _Tokens[name] = cancellationToken;
+            _Events.Add(name + ":" + identity);
+            if (name == _ThrowOn) throw new InvalidOperationException("sink failure on " + name);
+            return default;
         }
     }
 }

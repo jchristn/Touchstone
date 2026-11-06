@@ -1,0 +1,15 @@
+#nullable enable
+abstract Touchstone.MstestAdapter.TouchstoneMstestFactBase.Suites.get -> System.Collections.Generic.IReadOnlyList<Touchstone.Core.TestSuiteDescriptor!>!
+override Touchstone.MstestAdapter.TouchstoneMstestCase.ToString() -> string!
+static Touchstone.MstestAdapter.TouchstoneMstest.ExecuteAsync(Touchstone.MstestAdapter.TouchstoneMstestCase! testCase, Microsoft.VisualStudio.TestTools.UnitTesting.TestContext? testContext = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+static Touchstone.MstestAdapter.TouchstoneMstestCases.From<TProvider>(Touchstone.Core.TestRunOptions? options = null) -> System.Collections.Generic.IReadOnlyList<Microsoft.VisualStudio.TestTools.UnitTesting.TestDataRow<Touchstone.MstestAdapter.TouchstoneMstestCase!>!>!
+Touchstone.MstestAdapter.TouchstoneMstest
+Touchstone.MstestAdapter.TouchstoneMstestCase
+Touchstone.MstestAdapter.TouchstoneMstestCase.DisplayName.get -> string!
+Touchstone.MstestAdapter.TouchstoneMstestCase.SkipReason.get -> string?
+Touchstone.MstestAdapter.TouchstoneMstestCase.TestId.get -> string!
+Touchstone.MstestAdapter.TouchstoneMstestCases
+Touchstone.MstestAdapter.TouchstoneMstestFactBase
+Touchstone.MstestAdapter.TouchstoneMstestFactBase.RunAllAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Touchstone.MstestAdapter.TouchstoneMstestFactBase.TouchstoneMstestFactBase() -> void
+virtual Touchstone.MstestAdapter.TouchstoneMstestFactBase.Options.get -> Touchstone.Core.TestRunOptions?

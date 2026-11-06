@@ -1,21 +1,44 @@
-#nullable enable
 namespace Touchstone.Core
 {
     using System;
-    /// <summary>Immutable named data row. Consumers own thread safety of the supplied value.</summary>
+
+    /// <summary>
+    /// An immutable, named row of typed input for <see cref="ScenarioExamples.Expand{T}"/>.
+    /// Thread safety: the row itself is immutable; the thread safety of <see cref="Value"/> is the caller's responsibility.
+    /// </summary>
+    /// <typeparam name="T">Input type.</typeparam>
     public sealed class ScenarioExample<T>
     {
-        /// <summary>Stable identity, independent of parameter contents.</summary>
-        public string ExampleId { get; }
-        /// <summary>Typed input. Values are not automatically captured in reports or telemetry.</summary>
-        public T Value { get; }
-        /// <summary>Create a named example.</summary>
-        /// <exception cref="ArgumentException">Identity is blank.</exception>
+        private readonly string _ExampleId;
+        private readonly T _Value;
+
+        /// <summary>
+        /// Create a named example.
+        /// </summary>
+        /// <param name="exampleId">Stable identity, independent of the value. Cannot be null or blank.</param>
+        /// <param name="value">Typed input. May be null for reference types.</param>
+        /// <exception cref="ArgumentException">The identity is null or blank.</exception>
         public ScenarioExample(string exampleId, T value)
         {
             if (string.IsNullOrWhiteSpace(exampleId)) throw new ArgumentException("Example identity cannot be blank.", nameof(exampleId));
-            ExampleId = exampleId;
-            Value = value;
+            _ExampleId = exampleId;
+            _Value = value;
+        }
+
+        /// <summary>
+        /// Stable identity, independent of the value. Never null or blank.
+        /// </summary>
+        public string ExampleId
+        {
+            get { return _ExampleId; }
+        }
+
+        /// <summary>
+        /// Typed input. Values are not captured in reports or telemetry.
+        /// </summary>
+        public T Value
+        {
+            get { return _Value; }
         }
     }
 }

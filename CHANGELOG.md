@@ -7,9 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v1.0.0] - 2026-11-05
+
+The first stable release. Every breaking change is listed below and in MIGRATION.md.
+
+### Breaking
+
+- Packages: `Touchstone.XunitAdapter` is renamed `Touchstone.Xunit2Adapter`. The `Touchstone` metapackage contains only Core and Cli; add the adapter for your framework.
+- Descriptors are immutable. `TestCaseDescriptor` and `TestSuiteDescriptor` have no setters; use `WithTags`, `WithSkip`, `WithoutSkip`, and `WithDisplayName`. `TestCaseDescriptor.ExecuteAsync` is no longer public.
+- The `skip` constructor parameter is removed; a non-null `skipReason` means skipped.
+- Identities follow a grammar: suite identities use letters, digits, `_`, and `-`; case identities also allow `.`. Display names cannot be blank. Duplicate case and suite identities throw `DuplicateTestIdException`.
+- `TestResult` and `TestRunSummary` are immutable. `TestResult.Success`, `Skipped`, and `Canceled` are replaced by `Outcome`.
+- Every `TestExecutor` entry point takes `TestRunOptions? options`, and the `CancellationToken` is always last.
+- A failing `beforeSuiteAsync` no longer aborts the run: the suite's cases fail, teardown runs, and the failure is reported in `TestRunSummary.LifecycleErrors`.
+- Caller cancellation no longer throws from `RunAsync`; the summary reports `WasCanceled`, and unstarted cases are `NotRun`. Cancellation classification is the same for ordinary cases and scenarios.
+- `IScenarioStepSink` is merged into `ITestResultSink`; `OnTestCompletedAsync` is renamed `OnCaseCompletedAsync`.
+- Console runner: `ConsoleRunner.RunAsync(suites, ConsoleRunnerOptions?, ct)` and `RunMainAsync(suites, args, ct)` replace the previous overloads; exit codes are 0, 1, 2 (canceled), and 3 (invalid arguments). `ConsoleResultSink` takes `ConsoleRunnerOptions`.
+- `ScenarioHtmlReport` is replaced by `HtmlReport`. `JsonResultEntry` and `JsonStepEntry` are no longer public.
+- JSON results are a versioned document (`schemaVersion` 1.0) instead of a bare array, with `outcome` in place of `success` and `skipped`.
+- Adapter types follow one shape per framework: `Touchstone{Framework}Cases`, `Touchstone{Framework}`, and `Touchstone{Framework}FactBase`. The xUnit and MSTest data sources take an `ITestSuiteProvider` type and yield serializable row keys.
+- Telemetry names are frozen with fixed span names (`touchstone.suite`, `touchstone.case`, and so on), renamed count attributes, the `case_completed` sink event, and lowercase scenario labels. See TELEMETRY.md, "Changes in 1.0".
+
+### Added
+
+- `Touchstone.Xunit3Adapter` for xUnit v3 4.0.2 and later, with native row skips, display names, and traits.
+- `TestRunOptions` and `TestFilter`: tag, suite, and test identity filtering; `SkipBehavior` (`Report`, `Omit`, `Fail`); `StopOnFirstFailure`; `CleanupTimeout` for teardown after cancellation.
+- `TestOutcome` with `Canceled` and `NotRun`; `TestRunSummary.Filtered`, `WasCanceled`, and `LifecycleErrors`; `SuiteLifecycleError`.
+- `ITestResultSink` run, case-start, and step callbacks, each with a default implementation.
+- `TestRunAssert` for hosts that turn a run or a case into a pass or failure; `ITestSuiteProvider`.
+- Console runner command-line options (`--tag`, `--exclude-tag`, `--suite`, `--test`, `--skip`, `--stop-on-failure`, `--results`, `--html`, `--expand`, `--no-color`, `--help`) and Ctrl+C cancellation.
+- `JsonReport` with the published results schema (`JsonReport.Schema`, and `schemas/touchstone-results-1.0.schema.json` in the package); `ReportOptions`.
+- Native skips, display names, and tag categories in every adapter, and serializable row keys so Test Explorer and `--list-tests` show one test per case.
+- Native AOT support for Touchstone.Core and Touchstone.Cli, verified by `src/Test.Aot` on Linux, Windows, and macOS.
+- `touchstone.cases.filtered` metric, `not_run` case outcome, and canceled, not-run, and filtered counts on run and suite spans.
+- MIGRATION.md.
+
 ### Changed
 
-- Integrated BDD into the README walkthrough: a shared shopping-cart suite demonstrates delegate checks and behavior scenarios, followed by console/native host execution, step output, reports, and telemetry.
+- The README walkthrough covers every host, filtering, skip behavior, cancellation, results, AOT support, and the support policy.
+- Public API tracking (`PublicAPI.Shipped.txt` and `PublicAPI.Unshipped.txt`) and package validation for every package.
+- Test architecture: a 352-row test catalog in V1.0_PLAN.md; contract suites keyed by catalog ID; per-adapter contract suites; native outcome parity fixtures; consumer smoke tests against locally packed packages; and CI on every branch for Linux, Windows, and macOS.
+- Nullable reference types and explicit usings for every project; `tests/` renamed to `test/`.
+
+### Fixed
+
+- Skipped cases behaved differently per framework: NUnit and MSTest dropped them, and xUnit reported them as passed.
+- Run-all base classes discarded the original exceptions; `AggregateException.InnerExceptions` now holds them.
+- `ConsoleResultSink` changed the process console color even when writing to another writer.
+- MSTest rows were not serializable, so Test Explorer and category filters saw a single test.
+- Ordinary cases ignored cancellation between cases and reported caller cancellation as a failure.
+- Test identities could collide when a suite identity contained `.`.
+- Scenario metric labels used PascalCase outcomes while every other metric used lowercase.
+
+### Removed
+
+- `TestCaseDescriptor.Skip`, the `skip` parameter, and every descriptor and result setter.
+- `IScenarioStepSink`, `ScenarioHtmlReport`, `JsonResultEntry`, `JsonStepEntry`, `TouchstoneTheoryData`, `TouchstoneTestBase`, `TouchstoneFactBase`, `TouchstoneTestCaseSource`, `TouchstoneNunitBase`, `TouchstoneDynamicData`, and `TouchstoneMstestBase`.
 
 ## [v0.3.0-alpha] - 2026-10-16
 

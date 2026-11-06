@@ -1,40 +1,35 @@
 namespace Test.Shared
 {
     using System.Collections.Generic;
+    using System.Linq;
+
     using Touchstone.Core;
 
     /// <summary>
-    /// Central source of truth for every Touchstone test suite. All runners consume <see cref="All"/>.
+    /// Every runner-agnostic Touchstone contract suite. Every host, including Test.Aot, consumes <see cref="All"/>.
+    /// JIT hosts also run the reflection-based API convention suites from Test.Shared.Reflection.
+    /// Case identities are catalog IDs from V1.0_PLAN.md section 11.
     /// </summary>
     public static class TouchstoneSuites
     {
         /// <summary>
-        /// Every test suite, in execution order. A new list of freshly built descriptors is returned on each access.
+        /// Every suite, in execution order. Each access builds fresh descriptors.
         /// </summary>
         public static IReadOnlyList<TestSuiteDescriptor> All
         {
             get
             {
-                return new List<TestSuiteDescriptor>
-                {
-                    DescriptorSuites.TestCaseDescriptorSuite(),
-                    DescriptorSuites.TestSuiteDescriptorSuite(),
-                    ResultModelSuites.TestResultSuite(),
-                    ResultModelSuites.TestRunSummarySuite(),
-                    ResultModelSuites.JsonResultEntrySuite(),
-                    ExecutorSuites.TestExecutorSuite(),
-                    CliSuites.ConsoleResultSinkSuite(),
-                    CliSuites.ConsoleRunnerSuite(),
-                    AdapterSuites.XunitDataSuite(),
-                    AdapterSuites.NunitSourceSuite(),
-                    AdapterSuites.MstestDataSuite(),
-                    AdapterSuites.XunitFactBaseSuite(),
-                    AdapterSuites.NunitBaseSuite(),
-                    AdapterSuites.MstestBaseSuite(),
-                    AdapterSuites.FrameworkVersionSuite(),
-                    TelemetrySuites.TelemetrySuite(),
-                    ScenarioSuites.All(),
-                };
+                return DescriptorSuites.All()
+                    .Concat(ModelSuites.All())
+                    .Concat(FilterSuites.All())
+                    .Concat(ExecutionSuites.All())
+                    .Concat(CancellationSuites.All())
+                    .Concat(ScenarioSuites.All())
+                    .Concat(SinkSuites.All())
+                    .Concat(CliSuites.All())
+                    .Concat(ReportSuites.All())
+                    .Concat(TelemetrySuites.All())
+                    .ToList();
             }
         }
     }

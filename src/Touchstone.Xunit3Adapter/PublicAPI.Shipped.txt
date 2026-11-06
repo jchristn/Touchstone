@@ -1,0 +1,19 @@
+#nullable enable
+abstract Touchstone.Xunit3Adapter.TouchstoneXunit3FactBase.Suites.get -> System.Collections.Generic.IReadOnlyList<Touchstone.Core.TestSuiteDescriptor!>!
+const Touchstone.Xunit3Adapter.TouchstoneXunit3Cases.TagTraitName = "Category" -> string!
+override Touchstone.Xunit3Adapter.TouchstoneXunit3Case.ToString() -> string!
+static Touchstone.Xunit3Adapter.TouchstoneXunit3.ExecuteAsync(Touchstone.Xunit3Adapter.TouchstoneXunit3Case! testCase, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+static Touchstone.Xunit3Adapter.TouchstoneXunit3Cases.From<TProvider>(Touchstone.Core.TestRunOptions? options = null) -> Xunit.TheoryData<Touchstone.Xunit3Adapter.TouchstoneXunit3Case!>!
+Touchstone.Xunit3Adapter.TouchstoneXunit3
+Touchstone.Xunit3Adapter.TouchstoneXunit3Case
+Touchstone.Xunit3Adapter.TouchstoneXunit3Case.Deserialize(Xunit.Sdk.IXunitSerializationInfo! info) -> void
+Touchstone.Xunit3Adapter.TouchstoneXunit3Case.DisplayName.get -> string!
+Touchstone.Xunit3Adapter.TouchstoneXunit3Case.Serialize(Xunit.Sdk.IXunitSerializationInfo! info) -> void
+Touchstone.Xunit3Adapter.TouchstoneXunit3Case.SkipReason.get -> string?
+Touchstone.Xunit3Adapter.TouchstoneXunit3Case.TestId.get -> string!
+Touchstone.Xunit3Adapter.TouchstoneXunit3Case.TouchstoneXunit3Case() -> void
+Touchstone.Xunit3Adapter.TouchstoneXunit3Cases
+Touchstone.Xunit3Adapter.TouchstoneXunit3FactBase
+Touchstone.Xunit3Adapter.TouchstoneXunit3FactBase.RunAllAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Touchstone.Xunit3Adapter.TouchstoneXunit3FactBase.TouchstoneXunit3FactBase() -> void
+virtual Touchstone.Xunit3Adapter.TouchstoneXunit3FactBase.Options.get -> Touchstone.Core.TestRunOptions?

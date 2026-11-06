@@ -6,12 +6,14 @@ namespace Touchstone.Core
     using System.Threading.Tasks;
 
     /// <summary>
-    /// Result sink that keeps every completed result in memory, in completion order.
-    /// Not thread-safe: use one instance per run.
+    /// Result sink that keeps every case result in memory, in completion order.
+    /// Thread safety: not thread-safe. Use one instance per run.
     /// </summary>
     public sealed class TestResultCollector : ITestResultSink
     {
         private readonly List<TestResult> _Results = new List<TestResult>();
+        private IReadOnlyList<TestResult>? _Failures = null;
+        private TestRunSummary? _Summary = null;
 
         /// <summary>
         /// Initialize a new, empty collector.
@@ -25,37 +27,52 @@ namespace Touchstone.Core
         /// </summary>
         public IReadOnlyList<TestResult> Results
         {
-            get { return _Results; }
+            get { return _Results.AsReadOnly(); }
         }
 
         /// <summary>
-        /// Results that failed (not successful and not skipped), in completion order. Never null.
+        /// Results whose outcome is <see cref="TestOutcome.Failed"/> or <see cref="TestOutcome.Canceled"/>, in completion
+        /// order. Never null. Computed once per change, not on every access.
         /// </summary>
         public IReadOnlyList<TestResult> Failures
         {
-            get { return _Results.FindAll(r => !r.Success && !r.Skipped); }
+            get
+            {
+                if (_Failures == null)
+                {
+                    List<TestResult> failures = _Results.FindAll(r => r.Outcome == TestOutcome.Failed || r.Outcome == TestOutcome.Canceled);
+                    _Failures = failures.AsReadOnly();
+                }
+
+                return _Failures;
+            }
         }
 
-        /// <inheritdoc />
-        public ValueTask OnSuiteStartedAsync(TestSuiteDescriptor suite, CancellationToken cancellationToken)
+        /// <summary>
+        /// The run summary. Null until a multi-suite run completes.
+        /// </summary>
+        public TestRunSummary? Summary
         {
-            return ValueTask.CompletedTask;
+            get { return _Summary; }
         }
 
         /// <inheritdoc />
-        /// <exception cref="ArgumentNullException">Thrown when <paramref name="result"/> is null.</exception>
-        public ValueTask OnTestCompletedAsync(TestResult result, CancellationToken cancellationToken)
+        /// <exception cref="ArgumentNullException">The result is null.</exception>
+        public ValueTask OnCaseCompletedAsync(TestResult result, CancellationToken cancellationToken)
         {
             if (result == null) throw new ArgumentNullException(nameof(result));
 
             _Results.Add(result);
-            return ValueTask.CompletedTask;
+            _Failures = null;
+            return default;
         }
 
         /// <inheritdoc />
-        public ValueTask OnSuiteCompletedAsync(TestSuiteDescriptor suite, TestRunSummary summary, CancellationToken cancellationToken)
+        /// <exception cref="ArgumentNullException">The summary is null.</exception>
+        public ValueTask OnRunCompletedAsync(TestRunSummary summary, CancellationToken cancellationToken)
         {
-            return ValueTask.CompletedTask;
+            _Summary = summary ?? throw new ArgumentNullException(nameof(summary));
+            return default;
         }
     }
 }

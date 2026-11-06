@@ -69,90 +69,101 @@ namespace MyTests
 
 Given establishes preconditions, When performs an action, and Then checks an outcome. And inherits the preceding kind and cannot be the first step. It is displayed using that inherited kind. Steps run sequentially; the builder does not enforce a particular Given/When/Then grammar. Step IDs must be unique within a scenario. Adding steps to a builder after Build does not change previously built descriptors.
 
+Use `WithTags` to tag a scenario for filtering and `WithSkip` to skip it with a reason; both flow to the built descriptor.
+
 Reusable steps can be ordinary methods matching `Func<TContext, CancellationToken, Task>`, or `ScenarioStepDescriptor<TContext>` objects passed to `Step`. Assertions use specific exceptions or an assertion library chosen by the consumer. Core does not depend on any assertion framework.
 
 ## Context and cleanup
 
-The factory transfers ownership of a fresh context to one execution. Do not capture and reuse a mutable context instance in the factory. Discovery and Build do not create contexts. The same descriptor may execute concurrently, but delegates and externally shared clients remain the consumer's synchronization responsibility. Builders and result sinks are intended for one authoring flow or run, respectively.
+The factory transfers ownership of a fresh context to one execution. Do not capture and reuse a mutable context instance in the factory. Building a descriptor does not create a context. The same descriptor may execute concurrently, each execution with its own context, but delegates and externally shared clients remain the author's synchronization responsibility. Builders are intended for one authoring flow, and result sinks for one run.
 
-`WithCleanup` runs after successful context creation even when a step fails, an observer throws, or the caller cancels. It receives a fresh token with a default 30-second cancellation budget, configurable through `CleanupTimeout` (greater than zero and at most one day). The context is then disposed once, preferring `IAsyncDisposable` over `IDisposable`, even when custom cleanup fails. A factory that throws before returning a context owns cleanup of any partially created resources.
+`WithCleanup` runs after successful context creation, even when a step fails, an observer throws, or the caller cancels. It receives its own token, canceled after `CleanupTimeout` (default 30 seconds; greater than zero and at most one day). The context is then disposed once, preferring `IAsyncDisposable` over `IDisposable`, even when custom cleanup fails. A factory that throws before returning a context owns cleanup of any partially created resources.
 
-Cancellation is cooperative. Neither the cleanup budget nor caller cancellation forcibly terminates a delegate that ignores its token. `DisposeAsync` has no cancellation parameter and may also take longer than the budget.
+Cancellation is cooperative. Neither the cleanup budget nor caller cancellation can stop a delegate that ignores its token, and `DisposeAsync` has no cancellation parameter.
 
-The primary exception and original stack remain intact. Cleanup exceptions are recorded separately in `TestResult.CleanupExceptions`. If cleanup alone fails, the case fails using the first cleanup exception. A built scenario's `ExecuteAsync` cannot be replaced; doing so throws `InvalidOperationException` to prevent conflicting executable definitions. Ordinary descriptors remain mutable.
+The primary exception keeps its original stack trace. Cleanup exceptions are recorded separately in `TestResult.CleanupExceptions`. When cleanup alone fails, the case fails with the first cleanup exception. Descriptors are immutable, so a built scenario cannot be changed; `WithTags`, `WithSkip`, `WithoutSkip`, and `WithDisplayName` return copies that keep the scenario.
 
 ## Outcomes and execution APIs
 
-A scenario counts as one case regardless of how many steps it contains. A failed step stops subsequent steps, which become NotRun. Skipping the descriptor prevents context creation and marks its planned steps Skipped. Matching caller cancellation sets `TestResult.Canceled`, marks an active step Canceled, and leaves later steps NotRun. Cancellation before context creation leaves all steps NotRun. An unrelated `OperationCanceledException` is a failure.
+A scenario counts as one case regardless of how many steps it contains. A failed step stops later steps, which become NotRun. A skipped scenario creates no context and marks its steps Skipped. When the caller cancels during a step, the scenario's outcome is Canceled, the active step is Canceled, and later steps are NotRun; cancellation before context creation leaves every step NotRun. An `OperationCanceledException` while the caller's token is not canceled is a failure. These are the same rules ordinary cases follow.
 
 | Entry point | Behavior |
 |---|---|
-| `TestExecutor.RunAsync` / `RunSuiteAsync` | Collect case results through the sink. Scenario cancellation counts as a failed case so an incomplete run cannot succeed. Existing suite iteration behavior is preserved. |
-| `TestExecutor.ExecuteCaseResultAsync` | Return a structured result without throwing assertion failures. Optional step sink receives live events. No suite hooks run. |
-| `TestExecutor.ExecuteCaseAsync` | Rethrow the original case exception and stack, including caller cancellation. No suite hooks run. |
-| Scenario descriptor `ExecuteAsync` | Use the same throwing path, including telemetry and context ownership. |
-| `ScenarioDiagnostics.ExecuteAsync` | Send completed step diagnostics to a host callback, then rethrow the original exception. |
+| `TestExecutor.RunAsync` / `RunSuiteAsync` | Run suites and report every result through the sink. Cancellation and failed suite hooks are reported in the summary, not thrown. |
+| `TestExecutor.ExecuteCaseResultAsync` | Return a structured result without throwing for case failures. The optional sink receives case and step events. No suite hooks run. |
+| `TestExecutor.ExecuteCaseAsync` | Throw the original exception for a failed case and `OperationCanceledException` for a canceled one. No suite hooks run. |
+| `ScenarioDiagnostics.ExecuteAsync` | Send step diagnostics to a host callback, then throw like `ExecuteCaseAsync`. |
+| Adapter execute helpers | Run one case and report it through the framework's native outcome, writing step diagnostics to the framework's output. |
 
-Ordinary delegate cases retain their existing cancellation behavior. An `IScenarioStepSink` can observe steps without changing `ITestResultSink`. Start callbacks receive a NotRun snapshot; completion callbacks receive final executed-step outcomes. Skipped and unreached steps appear in final results, without live start/completion events. Observer errors propagate after owned-context cleanup, consistent with existing sink failures; they are not collected as assertion results. Completion observation receives a non-canceled token.
+Step events arrive through `ITestResultSink.OnStepStartedAsync` and `OnStepCompletedAsync`. Start callbacks receive a NotRun snapshot; completion callbacks receive the final step and a token that is not canceled. Skipped and unreached steps appear in final results without live events. An observer that throws stops the run after the scenario's context is cleaned up.
 
 ## Typed examples
 
-`ScenarioExamples.Expand` accepts named typed rows and a descriptor factory. It returns an eager read-only list, rejects duplicate example IDs and duplicate resulting test IDs, and never automatically records parameter values. Choose deterministic case IDs from example IDs; do not generate a GUID during discovery.
+`ScenarioExamples.Expand` accepts named typed rows and a factory. It returns an eager read-only list, rejects duplicate example identities and duplicate resulting test identities, and never records input values. Choose deterministic case identities from example identities; do not generate a GUID during discovery.
 
 ```csharp
-ScenarioExample<int>[] rows =
+namespace MyTests
 {
-    new ScenarioExample<int>("zero", 0),
-    new ScenarioExample<int>("one", 1)
-};
-IReadOnlyList<TestCaseDescriptor> cases = ScenarioExamples.Expand(rows, row =>
-    new ScenarioBuilder<int>("Values", row.ExampleId, "A value is preserved",
-        ct => Task.FromResult(row.Value))
-        .Then("equal", "the value matches the example", (value, ct) =>
+    using System;
+    using System.Collections.Generic;
+    using System.Threading.Tasks;
+
+    using Touchstone.Core;
+
+    /// <summary>Scenarios expanded from typed example rows.</summary>
+    public static class ValueScenarios
+    {
+        /// <summary>One case per example row.</summary>
+        /// <returns>The cases.</returns>
+        public static IReadOnlyList<TestCaseDescriptor> Cases()
         {
-            ct.ThrowIfCancellationRequested();
-            if (value != row.Value) throw new InvalidOperationException("Example value changed.");
-            return Task.CompletedTask;
-        })
-        .WithMetadata(new ScenarioMetadata("Values", exampleId: row.ExampleId))
-        .Build());
+            ScenarioExample<int>[] rows =
+            {
+                new ScenarioExample<int>("zero", 0),
+                new ScenarioExample<int>("one", 1),
+            };
+
+            return ScenarioExamples.Expand(rows, row =>
+                new ScenarioBuilder<int>("Values", row.ExampleId, "A value is preserved", ct => Task.FromResult(row.Value))
+                    .Then("equal", "the value matches the example", (value, ct) =>
+                    {
+                        if (value != row.Value) throw new InvalidOperationException("Example value changed.");
+                        return Task.CompletedTask;
+                    })
+                    .WithMetadata(new ScenarioMetadata("Values", exampleId: row.ExampleId))
+                    .Build());
+        }
+    }
+}
 ```
 
-Input values should be immutable or copied by the factory if multiple executions may overlap. Display names and requirement references are explicit metadata, separate from stable IDs.
+Input values should be immutable, or copied by the factory, if executions may overlap. Display names and requirement references are explicit metadata, separate from stable identities.
 
 ## Console, JSON, and offline reports
 
-Compact console output is unchanged. Set `ConsoleResultSink.ExpandSteps = true` to see live step progress. The shared and sample console programs accept these flags:
+Pass `--expand` to the console runner (or set `ConsoleRunnerOptions.ExpandSteps`) to see steps live:
 
 ```sh
-dotnet run --project src/Test.Automated -f net10.0 -- --steps --results /tmp/results.json --html /tmp/results.html
-dotnet run --project tests/Touchstone.SampleApp.Tests.Console -- --steps --html /tmp/notes.html
+dotnet run --project src/Test.Automated -f net10.0 -- --expand --results /tmp/results.json --html /tmp/results.html
+dotnet run --project test/Touchstone.SampleApp.Tests.Console -- --expand --html /tmp/notes.html
 ```
 
-Use `--fail` with the sample console to include intentional ordinary and scenario failures. A failed or canceled scenario produces console exit code 1. Export or observer errors propagate and the supplied console applications terminate unsuccessfully.
+Pass `--fail` to the sample console to add intentional failures. A failed scenario makes the console exit with code 1; a canceled run exits with code 2.
 
-JSON retains the root array and legacy fields. Added fields are `steps`, `canceled`, `feature`, `requirements`, `exampleId`, and `cleanupErrors`. Step entries include identity, name, kind, outcome, `durationMs` (fractional milliseconds), and optional message. Outcomes and kinds are strings. Ordinary cases have empty step/error arrays. `success` remains true for skipped cases. Exception objects are not serialized.
+JSON results follow `schemas/touchstone-results-1.0.schema.json`. Each result carries `outcome`, `tags`, `feature`, `exampleId`, `requirements`, `cleanupErrors`, and `steps`; each step carries `stepId`, `displayName`, `kind` (`given`, `when`, `then`), `outcome`, `durationMs` (fractional milliseconds), and `message`. Outcomes are lowercase strings. Exception objects are never serialized.
 
-`ScenarioHtmlReport.WriteAsync(results, path, runId, cancellationToken, redact)` generates an offline report from collected results. It groups features and scenarios, identifies the run and collection time, and shows counts, requirement references, examples, steps, timings, and errors. Text is escaped, references are rendered as text, and no scripts or remote assets are included. It works with `TestResultCollector.Results` from any host or with individually collected results from `ExecuteCaseResultAsync`.
+`HtmlReport.WriteAsync(summary, results, path, options, cancellationToken)` writes an offline report grouped by feature, with the run start time, counts, tags, requirement references, examples, steps, timings, and errors. Text is encoded, and no scripts or remote resources are included. It works with results from `TestResultCollector`, `ConsoleResultSink.AllResults`, or `ExecuteCaseResultAsync`.
 
-Parameter capture is absent by default. If a consumer deliberately includes values in step names or messages, those values become report text. Set `ConsoleResultSink.Redact` before execution to sanitize console and JSON output; pass the same function to HTML reporting. Redaction applies before writing to a report, not to in-memory raw results. Native output callbacks should apply their own redactor to `ScenarioDiagnostics.Format` output. Existing case telemetry can contain exception messages; consult `TELEMETRY.md` before exporting consumer exceptions.
+Input values are never captured automatically. If you put values into step names or messages, they become report text. Set `ConsoleRunnerOptions.Redact` or `ReportOptions.Redact` to sanitize every consumer string before it is written; in-memory results stay raw. Native output callbacks should redact `ScenarioDiagnostics.Format` output themselves. Telemetry can contain exception messages; consult TELEMETRY.md before exporting it.
 
 ## Native framework output
 
-Use the same shared descriptors for every framework. For row-based hosts, call `ScenarioDiagnostics.ExecuteAsync` with the output callback appropriate to your framework:
+Every adapter writes step diagnostics to its framework's output after each case: `TestContext.Current.TestOutputHelper` for xUnit v3, the `ITestOutputHelper` you pass for xUnit v2, `TestContext.Out` (or a writer you pass) for NUnit, and the `TestContext` you pass for MSTest. Native runners do not show steps as separate tests. Each case or example is one native test, and run-all base classes include step diagnostics in their failure message.
 
-| Framework | Callback |
-|---|---|
-| xUnit 2 | `text => output.WriteLine(text)` using injected `ITestOutputHelper` |
-| NUnit | `text => TestContext.Progress.WriteLine(text)` |
-| MSTest | `text => TestContext.WriteLine(text)` using the host's TestContext property |
-
-Output is sent after each case completes; native runners do not gain individually discoverable steps or guaranteed live nested output. Row-based discovery creates one native test per case/example. Full-suite wrappers retain their aggregation behavior and include step diagnostics in failure messages. Native labels for cancellation may be failure or cancellation depending on the host. Descriptor skip handling follows the existing adapter/discovery pattern; the diagnostic callback does not introduce a new native skip mechanism.
-
-The repository's shared suite includes real scenario descriptors plus contract checks; both wrapper and row hosts execute them. Notes sample contexts own a separate in-process application per execution, so scenarios work without suite lifecycle hooks in row-based hosts. The Notes API currently supports create, fetch, and delete; its sample scenarios cover persistence through create/fetch, missing notes, and validation.
+The Notes sample contexts own a separate in-process application per execution, so the scenarios work without suite hooks in one-test-per-case hosts.
 
 ## Migration and limits
 
-Keep suite/case IDs and tags when migrating an existing delegate. Move setup into the context factory, split observable operations into named steps, put assertions in Then steps, and transfer resource disposal to context ownership. Keep suite-level resources in existing hooks only when every selected host actually runs those hooks.
+When converting a delegate case to a scenario, keep its suite and case identities and tags. Move setup into the context factory, split observable operations into named steps, put assertions in Then steps, and let the context own resource disposal. Keep suite-level resources in suite hooks only when every host you use runs them (the console runner and run-all base classes do; one-test-per-case hosts do not).
 
-Feature-file parsing, binding discovery, DI containers, retries, parallel steps, nested scenarios, and parameter capture are outside this release. A behavior scenario is useful when its ordered steps help explain the outcome; a single ordinary delegate remains appropriate for a short assertion.
+Feature-file parsing, binding discovery, dependency injection, retries, parallel steps, nested scenarios, and parameter capture are out of scope. A scenario helps when ordered steps explain the outcome; a single delegate remains right for a short assertion.

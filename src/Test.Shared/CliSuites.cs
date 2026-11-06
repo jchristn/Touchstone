@@ -3,418 +3,367 @@ namespace Test.Shared
     using System;
     using System.Collections.Generic;
     using System.IO;
-    using System.Text.Json;
+    using System.Linq;
     using System.Threading;
     using System.Threading.Tasks;
+
     using Touchstone.Cli;
     using Touchstone.Core;
 
     /// <summary>
-    /// Suites covering <see cref="ConsoleResultSink"/> and <see cref="ConsoleRunner"/>.
-    /// All output is captured in memory so nothing is written to the real console.
+    /// Catalog sections 11.16 and 11.17: the console sink, the console runner, arguments, and exit codes.
     /// </summary>
     public static class CliSuites
     {
-        private const int _FixedColumnsWidth = 18;
-
         /// <summary>
-        /// Suite covering <see cref="ConsoleResultSink"/>.
+        /// Every suite in this file.
         /// </summary>
-        /// <returns>Suite descriptor.</returns>
-        public static TestSuiteDescriptor ConsoleResultSinkSuite()
+        /// <returns>The suites.</returns>
+        public static IEnumerable<TestSuiteDescriptor> All()
         {
-            const string S = "ConsoleResultSink";
+            yield return ConsoleSinkSuite();
+            yield return ConsoleRunnerSuite();
+            yield return ArgumentSuite();
+        }
 
-            return new TestSuiteDescriptor(S, "ConsoleResultSink", new List<TestCaseDescriptor>
+        internal static async Task<string> RunToText(IReadOnlyList<TestSuiteDescriptor> suites, Action<ConsoleRunnerOptions>? configure, CancellationToken ct, StrongBox<int>? code = null)
+        {
+            using (StringWriter writer = new StringWriter())
             {
-                CaseBuilder.Sync(S, "HeaderColumns", "ConsoleResultSink header lists Test, Result, and Runtime columns", () =>
-                {
-                    StringWriter writer = new StringWriter();
-                    ConsoleResultSink sink = new ConsoleResultSink(writer, useColor: false);
-                    sink.WriteHeader();
+                ConsoleRunnerOptions options = new ConsoleRunnerOptions { Writer = writer, UseColor = false };
+                configure?.Invoke(options);
+                int exit = await ConsoleRunner.RunAsync(suites, options, ct);
+                if (code != null) code.Value = exit;
+                return writer.ToString();
+            }
+        }
 
-                    string[] lines = Lines(writer);
-                    TestAssert.Equal(2, lines.Length, "header line count");
-                    TestAssert.True(lines[0].StartsWith("Test", StringComparison.Ordinal), "first column is Test");
-                    TestAssert.Contains("  Result  ", lines[0], "header");
-                    TestAssert.True(lines[0].EndsWith(" Runtime", StringComparison.Ordinal), "last column is Runtime");
-                    TestAssert.Equal(lines[0].Length, lines[1].Length, "separator width matches header");
-                    TestAssert.Equal(string.Empty, lines[1].Replace("-", string.Empty).Replace(" ", string.Empty), "separator contains only dashes and spaces");
+        private static TestSuiteDescriptor ConsoleSinkSuite()
+        {
+            const string S = "ConsoleSink";
+            return new TestSuiteDescriptor(S, "Console sink", new[]
+            {
+                Check.Async(S, "CSINK-01", "The header lists Test, Result, and Runtime", async ct =>
+                {
+                    string text = await RunToText(new[] { Fixtures.Suite("C") }, null, ct);
+                    string header = text.Split('\n')[0];
+                    TestAssert.True(header.StartsWith("Test", StringComparison.Ordinal), "test column");
+                    TestAssert.Contains("Result", header, "result column");
+                    TestAssert.Contains("Runtime", header, "runtime column");
                 }),
-
-                CaseBuilder.Async(S, "ResultLabels", "ConsoleResultSink renders PASS, FAIL, and SKIP labels", async ct =>
+                Check.Async(S, "CSINK-02", "Rows render PASS, FAIL, SKIP, CANCELED, and NOT RUN", async ct =>
                 {
-                    StringWriter writer = new StringWriter();
-                    ConsoleResultSink sink = new ConsoleResultSink(writer, useColor: false);
-
-                    await sink.OnTestCompletedAsync(Result("Passing case", success: true), ct).ConfigureAwait(false);
-                    await sink.OnTestCompletedAsync(Result("Failing case", success: false), ct).ConfigureAwait(false);
-                    await sink.OnTestCompletedAsync(Result("Skipped case", success: true, skipped: true), ct).ConfigureAwait(false);
-
-                    string[] lines = Lines(writer);
-                    TestAssert.Equal(3, lines.Length, "line count");
-                    TestAssert.True(lines[0].StartsWith("Passing case", StringComparison.Ordinal), "pass line name");
-                    TestAssert.Contains("  PASS  ", lines[0], "pass line");
-                    TestAssert.Contains("  FAIL  ", lines[1], "fail line");
-                    TestAssert.Contains("  SKIP  ", lines[2], "skip line");
-                    TestAssert.True(lines[0].EndsWith("ms", StringComparison.Ordinal), "runtime suffix");
+                    using (CancellationTokenSource source = new CancellationTokenSource())
+                    {
+                        string text = await RunToText(new[] { Fixtures.Suite("C", Fixtures.Passing("C", "A"), Fixtures.Failing("C", "B"), Fixtures.Skipped("C", "D"),
+                            Fixtures.CancelsRun("C", "E", source), Fixtures.Passing("C", "F")) }, null, source.Token);
+                        foreach (string label in new[] { "PASS", "FAIL", "SKIP", "CANCELED", "NOT RUN" })
+                            TestAssert.Contains(label, text, label);
+                    }
                 }),
-
-                CaseBuilder.Async(S, "RuntimeRounding", "ConsoleResultSink rounds runtimes to whole milliseconds away from zero", async ct =>
+                Check.Async(S, "CSINK-03", "Runtimes round to whole milliseconds, away from zero", async ct =>
                 {
-                    StringWriter writer = new StringWriter();
-                    ConsoleResultSink sink = new ConsoleResultSink(writer, useColor: false);
-
-                    TestResult zero = Result("zero", success: true);
-                    TestResult half = Result("half", success: true);
-                    half.Duration = TimeSpan.FromTicks(25000);
-                    TestResult big = Result("big", success: true);
-                    big.Duration = TimeSpan.FromMilliseconds(1234);
-
-                    await sink.OnTestCompletedAsync(zero, ct).ConfigureAwait(false);
-                    await sink.OnTestCompletedAsync(half, ct).ConfigureAwait(false);
-                    await sink.OnTestCompletedAsync(big, ct).ConfigureAwait(false);
-
-                    string[] lines = Lines(writer);
-                    TestAssert.True(lines[0].EndsWith(" 0ms", StringComparison.Ordinal), "0ms: " + lines[0]);
-                    TestAssert.True(lines[1].EndsWith(" 3ms", StringComparison.Ordinal), "2.5ms rounds to 3ms: " + lines[1]);
-                    TestAssert.True(lines[2].EndsWith(" 1234ms", StringComparison.Ordinal), "1234ms: " + lines[2]);
+                    using (StringWriter writer = new StringWriter())
+                    {
+                        ConsoleResultSink sink = new ConsoleResultSink(new ConsoleRunnerOptions { Writer = writer, UseColor = false });
+                        await sink.OnCaseCompletedAsync(new TestResult("C", "A", "Half", TestOutcome.Passed, TimeSpan.FromMilliseconds(2.5)), ct);
+                        await sink.OnCaseCompletedAsync(new TestResult("C", "B", "Low", TestOutcome.Passed, TimeSpan.FromMilliseconds(2.4)), ct);
+                        string[] lines = writer.ToString().Split('\n');
+                        TestAssert.True(lines[0].TrimEnd().EndsWith("3ms", StringComparison.Ordinal), "2.5 rounds to 3");
+                        TestAssert.True(lines[1].TrimEnd().EndsWith("2ms", StringComparison.Ordinal), "2.4 rounds to 2");
+                    }
                 }),
-
-                CaseBuilder.Async(S, "CollectsResultsInOrder", "ConsoleResultSink AllResults collects every result in order", async ct =>
+                Check.Async(S, "CSINK-04", "Long names are truncated with an ellipsis; names that fit are not", async ct =>
                 {
-                    ConsoleResultSink sink = new ConsoleResultSink(new StringWriter(), useColor: false);
-                    TestResult a = Result("a", success: true);
-                    TestResult b = Result("b", success: false);
-
-                    TestAssert.Equal(0, sink.AllResults.Count, "initial count");
-                    await sink.OnTestCompletedAsync(a, ct).ConfigureAwait(false);
-                    await sink.OnTestCompletedAsync(b, ct).ConfigureAwait(false);
-
-                    TestAssert.Equal(2, sink.AllResults.Count, "count");
-                    TestAssert.Same(a, sink.AllResults[0], "first");
-                    TestAssert.Same(b, sink.AllResults[1], "second");
+                    using (StringWriter writer = new StringWriter())
+                    {
+                        ConsoleResultSink sink = new ConsoleResultSink(new ConsoleRunnerOptions { Writer = writer, UseColor = false });
+                        string fits = new string('a', sink.DescriptionColumnWidth);
+                        string tooLong = new string('b', sink.DescriptionColumnWidth + 5);
+                        await sink.OnCaseCompletedAsync(new TestResult("C", "A", fits, TestOutcome.Passed, TimeSpan.Zero), ct);
+                        await sink.OnCaseCompletedAsync(new TestResult("C", "B", tooLong, TestOutcome.Passed, TimeSpan.Zero), ct);
+                        string[] lines = writer.ToString().Split('\n');
+                        TestAssert.True(lines[0].StartsWith(fits + "  ", StringComparison.Ordinal), "exact fit kept");
+                        TestAssert.True(lines[1].StartsWith(new string('b', sink.DescriptionColumnWidth - 3) + "...  ", StringComparison.Ordinal), "truncated");
+                    }
                 }),
-
-                CaseBuilder.Async(S, "NullResultThrows", "ConsoleResultSink rejects a null result", async ct =>
+                Check.Sync(S, "CSINK-05", "A non-console writer uses the default width of 100", () =>
                 {
-                    ConsoleResultSink sink = new ConsoleResultSink(new StringWriter(), useColor: false);
-                    ArgumentNullException ex = await TestAssert.ThrowsAsync<ArgumentNullException>(
-                        () => sink.OnTestCompletedAsync(null!, ct).AsTask(), "null result").ConfigureAwait(false);
-                    TestAssert.Equal("result", ex.ParamName, "ParamName");
-                    TestAssert.Equal(0, sink.AllResults.Count, "nothing recorded");
+                    using (StringWriter writer = new StringWriter())
+                    {
+                        TestAssert.Equal(100, new ConsoleResultSink(new ConsoleRunnerOptions { Writer = writer }).DescriptionColumnWidth, "width");
+                    }
                 }),
-
-                CaseBuilder.Async(S, "SuiteEventsWriteNothing", "ConsoleResultSink suite start and completion events produce no output", async ct =>
+                Check.Async(S, "CSINK-06", "The overall section lists failed and canceled tests, then lifecycle errors", async ct =>
                 {
-                    StringWriter writer = new StringWriter();
-                    ConsoleResultSink sink = new ConsoleResultSink(writer, useColor: false);
-                    TestSuiteDescriptor suite = Fixtures.Suite("X");
-
-                    await sink.OnSuiteStartedAsync(suite, ct).ConfigureAwait(false);
-                    await sink.OnSuiteCompletedAsync(suite, new TestRunSummary(), ct).ConfigureAwait(false);
-
-                    TestAssert.Equal(string.Empty, writer.ToString(), "output");
+                    using (CancellationTokenSource source = new CancellationTokenSource())
+                    {
+                        string text = await RunToText(new[]
+                        {
+                            Fixtures.HookedSuite("C", null, _ => throw new InvalidOperationException("teardown broke"), Fixtures.Passing("C", "Ok"), Fixtures.Failing("C", "Bad", "bad message")),
+                            Fixtures.Suite("D", Fixtures.CancelsRun("D", "Stop", source)),
+                        }, null, source.Token);
+                        string overall = text.Substring(text.IndexOf("OVERALL", StringComparison.Ordinal));
+                        TestAssert.Contains("Failed Tests:", overall, "failed header");
+                        TestAssert.Contains("Bad display", overall, "failed case");
+                        TestAssert.Contains("bad message", overall, "failure message");
+                        TestAssert.Contains("Stop display", overall, "canceled case");
+                        TestAssert.DoesNotContain("Ok display", overall, "passing case");
+                        TestAssert.True(overall.IndexOf("Suite Lifecycle Errors:", StringComparison.Ordinal) > overall.IndexOf("Failed Tests:", StringComparison.Ordinal), "lifecycle after failures");
+                        TestAssert.Contains("C after_suite: teardown broke", overall, "lifecycle error");
+                    }
                 }),
-
-                CaseBuilder.Async(S, "LongNamesTruncated", "ConsoleResultSink truncates long display names with an ellipsis", async ct =>
+                Check.Async(S, "CSINK-07", "The totals line shows the filtered count when non-zero", async ct =>
                 {
-                    StringWriter writer = new StringWriter();
-                    ConsoleResultSink sink = new ConsoleResultSink(writer, useColor: false);
-                    sink.WriteHeader();
-                    int width = Lines(writer)[0].Length - _FixedColumnsWidth;
-
-                    StringWriter resultWriter = new StringWriter();
-                    ConsoleResultSink resultSink = new ConsoleResultSink(resultWriter, useColor: false);
-                    string longName = new string('x', width + 25);
-                    await resultSink.OnTestCompletedAsync(Result(longName, success: true), ct).ConfigureAwait(false);
-
-                    string line = Lines(resultWriter)[0];
-                    string description = line.Substring(0, width);
-                    TestAssert.True(description.EndsWith("...", StringComparison.Ordinal), "ellipsis");
-                    TestAssert.Equal(new string('x', width - 3) + "...", description, "truncated description");
-                    TestAssert.Equal(width + _FixedColumnsWidth, line.Length, "line width");
+                    TestSuiteDescriptor suite = Fixtures.Suite("C", Fixtures.Passing("C", "A", null, new[] { "keep" }), Fixtures.Passing("C", "B"));
+                    string filtered = await RunToText(new[] { suite }, o => o.Run.Filter.IncludeTags.Add("keep"), ct);
+                    string unfiltered = await RunToText(new[] { suite }, null, ct);
+                    TestAssert.Contains("Filtered: 1", filtered, "filtered");
+                    TestAssert.DoesNotContain("Filtered", unfiltered, "unfiltered");
                 }),
-
-                CaseBuilder.Async(S, "ExactWidthNotTruncated", "ConsoleResultSink does not truncate a name that exactly fits", async ct =>
+                Check.Async(S, "CSINK-08", "ANSI color is written only when enabled or to a live console", async ct =>
                 {
-                    StringWriter headerWriter = new StringWriter();
-                    new ConsoleResultSink(headerWriter, useColor: false).WriteHeader();
-                    int width = Lines(headerWriter)[0].Length - _FixedColumnsWidth;
-
-                    StringWriter writer = new StringWriter();
-                    ConsoleResultSink sink = new ConsoleResultSink(writer, useColor: false);
-                    string name = new string('y', width);
-                    await sink.OnTestCompletedAsync(Result(name, success: true), ct).ConfigureAwait(false);
-
-                    TestAssert.True(Lines(writer)[0].StartsWith(name + "  PASS", StringComparison.Ordinal), "full name rendered");
+                    TestSuiteDescriptor suite = Fixtures.Suite("C", Fixtures.Passing("C", "A"));
+                    string auto = await RunToText(new[] { suite }, o => o.UseColor = null, ct);
+                    string forced = await RunToText(new[] { suite }, o => o.UseColor = true, ct);
+                    string off = await RunToText(new[] { suite }, o => o.UseColor = false, ct);
+                    TestAssert.DoesNotContain("\u001b[", auto, "auto with a custom writer");
+                    TestAssert.Contains("\u001b[32mPASS", forced, "forced");
+                    TestAssert.DoesNotContain("\u001b[", off, "off");
                 }),
-
-                CaseBuilder.Async(S, "EmptyNamePadded", "ConsoleResultSink pads an empty display name to the column width", async ct =>
+                Check.Async(S, "CSINK-09", "The process console color is never changed", async ct =>
                 {
-                    StringWriter writer = new StringWriter();
-                    ConsoleResultSink sink = new ConsoleResultSink(writer, useColor: false);
-                    await sink.OnTestCompletedAsync(Result(string.Empty, success: true), ct).ConfigureAwait(false);
-
-                    string line = Lines(writer)[0];
-                    int width = line.IndexOf("  PASS", StringComparison.Ordinal);
-                    TestAssert.True(width > 0, "PASS label present after padding");
-                    TestAssert.Equal(string.Empty, line.Substring(0, width).Trim(), "description column is blank");
+                    ConsoleColor before = Console.ForegroundColor;
+                    await RunToText(new[] { Fixtures.Suite("C", Fixtures.Passing("C", "A"), Fixtures.Failing("C", "B")) }, o => o.UseColor = true, ct);
+                    TestAssert.Equal(before, Console.ForegroundColor, "foreground color");
                 }),
-
-                CaseBuilder.Sync(S, "OverallPass", "ConsoleResultSink overall summary for a passing run has no failure listing", () =>
+                Check.Async(S, "CSINK-10", "ExpandSteps writes live step lines; off writes none", async ct =>
                 {
-                    StringWriter writer = new StringWriter();
-                    ConsoleResultSink sink = new ConsoleResultSink(writer, useColor: false);
-                    sink.WriteOverall(TimeSpan.FromMilliseconds(23), 3, 2, 0, 1);
-
-                    string output = writer.ToString();
-                    string[] lines = Lines(writer);
-                    TestAssert.Equal(string.Empty, lines[0], "leading blank line");
-                    TestAssert.True(lines[1].StartsWith("OVERALL", StringComparison.Ordinal), "OVERALL row");
-                    TestAssert.Contains("  PASS  ", lines[1], "OVERALL status");
-                    TestAssert.True(lines[1].EndsWith("23ms", StringComparison.Ordinal), "OVERALL runtime");
-                    TestAssert.Equal("Total: 3  Passed: 2  Failed: 0  Skipped: 1", lines[2], "totals line");
-                    TestAssert.DoesNotContain("Failed Tests:", output, "output");
+                    TestSuiteDescriptor suite = Fixtures.Suite("C", Fixtures.Scenario("C", "Scn", (c, t) => Task.CompletedTask));
+                    string expanded = await RunToText(new[] { suite }, o => o.ExpandSteps = true, ct);
+                    string compact = await RunToText(new[] { suite }, null, ct);
+                    TestAssert.Contains("WHEN the action runs...", expanded, "step start");
+                    TestAssert.DoesNotContain("the action runs", compact, "compact");
                 }),
-
-                CaseBuilder.Async(S, "OverallFailListsFailures", "ConsoleResultSink overall summary lists only failed tests and their messages", async ct =>
+                Check.Async(S, "CSINK-11", "Redact applies to every consumer string written", async ct =>
                 {
-                    StringWriter writer = new StringWriter();
-                    ConsoleResultSink sink = new ConsoleResultSink(writer, useColor: false);
-
-                    TestResult failed = Result("Broken thing", success: false);
-                    failed.Message = "Expected 400 but got 200";
-                    TestResult failedNoMessage = Result("Silent failure", success: false);
-                    TestResult skipped = Result("Skipped thing", success: true, skipped: true);
-                    skipped.Message = "not ready";
-                    await sink.OnTestCompletedAsync(Result("Good thing", success: true), ct).ConfigureAwait(false);
-                    await sink.OnTestCompletedAsync(failed, ct).ConfigureAwait(false);
-                    await sink.OnTestCompletedAsync(failedNoMessage, ct).ConfigureAwait(false);
-                    await sink.OnTestCompletedAsync(skipped, ct).ConfigureAwait(false);
-
-                    writer.GetStringBuilder().Clear();
-                    sink.WriteOverall(TimeSpan.FromMilliseconds(5), 4, 1, 2, 1);
-
-                    string[] lines = Lines(writer);
-                    TestAssert.Contains("  FAIL  ", lines[1], "OVERALL status");
-                    TestAssert.Equal("Total: 4  Passed: 1  Failed: 2  Skipped: 1", lines[2], "totals line");
-                    TestAssert.Equal("Failed Tests:", lines[3], "failure header");
-                    TestAssert.Equal("  Broken thing", lines[4], "first failure name");
-                    TestAssert.Equal("    Expected 400 but got 200", lines[5], "first failure message");
-                    TestAssert.Equal("  Silent failure", lines[6], "second failure name without message");
-                    TestAssert.Equal(7, lines.Length, "no further lines");
-                    TestAssert.DoesNotContain("Good thing", writer.ToString(), "passing test not listed");
-                    TestAssert.DoesNotContain("Skipped thing", writer.ToString(), "skipped test not listed");
+                    TestCaseDescriptor scenario = new ScenarioBuilder<ScenarioContext>("C", "Scn", "secret scenario", _ => Task.FromResult(new ScenarioContext { FailDisposal = true }))
+                        .Then("a", "secret step", (_, _) => throw new InvalidOperationException("secret failure"))
+                        .And("b", "secret later", (_, _) => Task.CompletedTask)
+                        .Build();
+                    string text = await RunToText(new[] { Fixtures.HookedSuite("C", null, _ => throw new InvalidOperationException("secret hook"), scenario) }, o =>
+                    {
+                        o.ExpandSteps = true;
+                        o.Redact = s => s.Replace("secret", "[x]", StringComparison.Ordinal);
+                    }, ct);
+                    TestAssert.DoesNotContain("secret", text, "redacted");
+                    TestAssert.Contains("[x] step", text, "redaction applied");
+                }),
+                Check.Sync(S, "CSINK-12", "A null Redact is rejected", () =>
+                {
+                    TestAssert.Throws<ArgumentNullException>(() => new ConsoleRunnerOptions().Redact = null!, "redact");
                 }),
             });
         }
 
-        /// <summary>
-        /// Suite covering <see cref="ConsoleRunner"/>.
-        /// </summary>
-        /// <returns>Suite descriptor.</returns>
-        public static TestSuiteDescriptor ConsoleRunnerSuite()
+        private static TestSuiteDescriptor ConsoleRunnerSuite()
         {
             const string S = "ConsoleRunner";
-
-            return new TestSuiteDescriptor(S, "ConsoleRunner", new List<TestCaseDescriptor>
+            return new TestSuiteDescriptor(S, "Console runner", new[]
             {
-                CaseBuilder.Async(S, "NullSuitesThrows", "ConsoleRunner rejects null suites", async ct =>
+                Check.Async(S, "CRUN-01", "Null suites are rejected", async ct =>
                 {
-                    ArgumentNullException ex = await TestAssert.ThrowsAsync<ArgumentNullException>(
-                        () => ConsoleRunner.RunAsync(null!, QuietSink(), null, ct), "null suites").ConfigureAwait(false);
-                    TestAssert.Equal("suites", ex.ParamName, "ParamName");
+                    await TestAssert.ThrowsAsync<ArgumentNullException>(() => ConsoleRunner.RunAsync(null!, null, ct), "options overload");
+                    await TestAssert.ThrowsAsync<ArgumentNullException>(() => ConsoleRunner.RunMainAsync(null!, Array.Empty<string>(), ct), "main overload");
+                    await TestAssert.ThrowsAsync<ArgumentNullException>(() => ConsoleRunner.RunMainAsync(Array.Empty<TestSuiteDescriptor>(), null!, ct), "null args");
                 }),
-
-                CaseBuilder.Async(S, "AllPassReturnsZero", "ConsoleRunner returns exit code 0 when all tests pass", async ct =>
+                Check.Async(S, "CRUN-02", "Exit 0 for passing, skipped-only, and empty runs", async ct =>
                 {
-                    int exitCode = await ConsoleRunner.RunAsync(
-                        Suites(Fixtures.Suite("X", Fixtures.Passing("X", "A"), Fixtures.Passing("X", "B"))),
-                        QuietSink(), null, ct).ConfigureAwait(false);
-                    TestAssert.Equal(0, exitCode, "exit code");
+                    StrongBox<int> code = new StrongBox<int>();
+                    await RunToText(new[] { Fixtures.Suite("C", Fixtures.Passing("C", "A")) }, null, ct, code);
+                    TestAssert.Equal(ConsoleRunner.ExitSuccess, code.Value, "passing");
+                    await RunToText(new[] { Fixtures.Suite("C", Fixtures.Skipped("C", "A")) }, null, ct, code);
+                    TestAssert.Equal(0, code.Value, "skipped");
+                    await RunToText(Array.Empty<TestSuiteDescriptor>(), null, ct, code);
+                    TestAssert.Equal(0, code.Value, "empty");
                 }),
-
-                CaseBuilder.Async(S, "AnyFailReturnsOne", "ConsoleRunner returns exit code 1 when any test fails", async ct =>
+                Check.Async(S, "CRUN-03", "Exit 1 when a case fails", async ct =>
                 {
-                    int exitCode = await ConsoleRunner.RunAsync(
-                        Suites(
-                            Fixtures.Suite("X", Fixtures.Passing("X", "A")),
-                            Fixtures.Suite("Y", Fixtures.Failing("Y", "B", "b"))),
-                        QuietSink(), null, ct).ConfigureAwait(false);
-                    TestAssert.Equal(1, exitCode, "exit code");
+                    StrongBox<int> code = new StrongBox<int>();
+                    await RunToText(new[] { Fixtures.Suite("C", Fixtures.Passing("C", "A"), Fixtures.Failing("C", "B")) }, null, ct, code);
+                    TestAssert.Equal(ConsoleRunner.ExitFailure, code.Value, "code");
+                    TestAssert.Equal(1, ConsoleRunner.ExitFailure, "constant");
                 }),
-
-                CaseBuilder.Async(S, "OnlySkippedReturnsZero", "ConsoleRunner returns exit code 0 when tests are only skipped", async ct =>
+                Check.Async(S, "CRUN-04", "Exit 1 for a lifecycle error with no failed case", async ct =>
                 {
-                    int exitCode = await ConsoleRunner.RunAsync(
-                        Suites(Fixtures.Suite("X", Fixtures.Skipped("X", "A"))),
-                        QuietSink(), null, ct).ConfigureAwait(false);
-                    TestAssert.Equal(0, exitCode, "exit code");
+                    StrongBox<int> code = new StrongBox<int>();
+                    await RunToText(new[] { Fixtures.HookedSuite("C", null, _ => throw new InvalidOperationException("x"), Fixtures.Passing("C", "A")) }, null, ct, code);
+                    TestAssert.Equal(1, code.Value, "code");
                 }),
-
-                CaseBuilder.Async(S, "EmptyRun", "ConsoleRunner handles an empty suite list", async ct =>
+                Check.Async(S, "CRUN-05", "Exit 2 when canceled", async ct =>
                 {
-                    StringWriter writer = new StringWriter();
-                    int exitCode = await ConsoleRunner.RunAsync(
-                        new List<TestSuiteDescriptor>(), new ConsoleResultSink(writer, useColor: false), null, ct).ConfigureAwait(false);
-                    TestAssert.Equal(0, exitCode, "exit code");
-                    TestAssert.Contains("Total: 0  Passed: 0  Failed: 0  Skipped: 0", writer.ToString(), "output");
+                    using (CancellationTokenSource source = new CancellationTokenSource())
+                    {
+                        StrongBox<int> code = new StrongBox<int>();
+                        await RunToText(new[] { Fixtures.Suite("C", Fixtures.CancelsRun("C", "A", source)) }, null, source.Token, code);
+                        TestAssert.Equal(ConsoleRunner.ExitCanceled, code.Value, "code");
+                        TestAssert.Equal(2, ConsoleRunner.ExitCanceled, "constant");
+                    }
                 }),
-
-                CaseBuilder.Async(S, "AggregatesAcrossSuites", "ConsoleRunner writes header, every result, and totals across suites", async ct =>
+                Check.Sync(S, "CRUN-06", "Invalid arguments map to exit 3 without running tests", () =>
                 {
-                    StringWriter writer = new StringWriter();
-                    int exitCode = await ConsoleRunner.RunAsync(
-                        Suites(
-                            Fixtures.Suite("X", Fixtures.Passing("X", "A"), Fixtures.Skipped("X", "B")),
-                            Fixtures.Suite("Y", Fixtures.Failing("Y", "C", "c failed"), Fixtures.Passing("Y", "D"))),
-                        new ConsoleResultSink(writer, useColor: false), null, ct).ConfigureAwait(false);
-
-                    string[] lines = Lines(writer);
-                    TestAssert.Equal(1, exitCode, "exit code");
-                    TestAssert.True(lines[0].StartsWith("Test", StringComparison.Ordinal), "header first");
-                    TestAssert.True(lines[2].StartsWith("A display", StringComparison.Ordinal), "first result");
-                    TestAssert.True(lines[3].StartsWith("B display", StringComparison.Ordinal), "second result");
-                    TestAssert.True(lines[4].StartsWith("C display", StringComparison.Ordinal), "third result");
-                    TestAssert.True(lines[5].StartsWith("D display", StringComparison.Ordinal), "fourth result");
-                    TestAssert.Contains("Total: 4  Passed: 2  Failed: 1  Skipped: 1", writer.ToString(), "totals");
-                    TestAssert.Contains("    c failed", writer.ToString(), "failure message");
+                    TestAssert.Equal(3, ConsoleRunner.ExitInvalidArguments, "constant");
+                    TestAssert.Throws<ConsoleArgumentException>(() => ConsoleRunnerOptions.Parse(new[] { "--bogus" }), "parse");
+                    TestAssert.Contains("--tag", ConsoleRunnerOptions.Usage, "usage text");
+                    TestAssert.Contains("3 invalid arguments", ConsoleRunnerOptions.Usage, "usage documents exit codes");
                 }),
-
-                CaseBuilder.Async(S, "ExportsJson", "ConsoleRunner writes camelCase JSON results to the results path", async ct =>
+                Check.Async(S, "CRUN-07", "Writes the header, every result, and totals across suites", async ct =>
                 {
-                    string path = Path.Combine(Path.GetTempPath(), "touchstone-test-" + Guid.NewGuid().ToString("N") + ".json");
+                    string text = await RunToText(new[] { Fixtures.Suite("C", Fixtures.Passing("C", "A")), Fixtures.Suite("D", Fixtures.Passing("D", "B")) }, null, ct);
+                    TestAssert.Contains("A display", text, "first");
+                    TestAssert.Contains("B display", text, "second");
+                    TestAssert.Contains("Total: 2  Passed: 2  Failed: 0  Skipped: 0", text, "totals");
+                }),
+                Check.Async(S, "CRUN-08", "JSON is written when a path is set and overwritten on rerun", async ct =>
+                {
+                    string path = Path.Combine(Path.GetTempPath(), "touchstone-" + Guid.NewGuid().ToString("N") + ".json");
                     try
                     {
-                        TestCaseDescriptor slow = new TestCaseDescriptor("X", "Slow", "Slow case", async t =>
-                        {
-                            await Task.Delay(20, t).ConfigureAwait(false);
-                        });
-                        await ConsoleRunner.RunAsync(
-                            Suites(Fixtures.Suite("X", slow, Fixtures.Failing("X", "Bad", "bad message"), Fixtures.Skipped("X", "Later", "reason"))),
-                            QuietSink(), path, ct).ConfigureAwait(false);
-
-                        TestAssert.True(File.Exists(path), "results file created");
-                        string json = await File.ReadAllTextAsync(path, ct).ConfigureAwait(false);
-                        using (JsonDocument doc = JsonDocument.Parse(json))
-                        {
-                            JsonElement root = doc.RootElement;
-                            TestAssert.Equal(JsonValueKind.Array, root.ValueKind, "root kind");
-                            TestAssert.Equal(3, root.GetArrayLength(), "entry count");
-
-                            JsonElement first = root[0];
-                            TestAssert.Equal("X.Slow", first.GetProperty("testId").GetString(), "testId");
-                            TestAssert.Equal("X", first.GetProperty("suiteId").GetString(), "suiteId");
-                            TestAssert.Equal("Slow", first.GetProperty("caseId").GetString(), "caseId");
-                            TestAssert.Equal("Slow case", first.GetProperty("displayName").GetString(), "displayName");
-                            TestAssert.True(first.GetProperty("success").GetBoolean(), "success");
-                            TestAssert.False(first.GetProperty("skipped").GetBoolean(), "skipped");
-                            TestAssert.True(first.GetProperty("durationMs").GetInt64() >= 15, "durationMs reflects elapsed time");
-                            TestAssert.Equal(JsonValueKind.Null, first.GetProperty("message").ValueKind, "message is null on success");
-
-                            JsonElement second = root[1];
-                            TestAssert.False(second.GetProperty("success").GetBoolean(), "failed success");
-                            TestAssert.Equal("bad message", second.GetProperty("message").GetString(), "failed message");
-
-                            JsonElement third = root[2];
-                            TestAssert.True(third.GetProperty("skipped").GetBoolean(), "skipped flag");
-                            TestAssert.True(third.GetProperty("success").GetBoolean(), "skipped success");
-                            TestAssert.Equal("reason", third.GetProperty("message").GetString(), "skip message");
-                            TestAssert.Equal(0L, third.GetProperty("durationMs").GetInt64(), "skip duration");
-
-                            TestAssert.False(first.TryGetProperty("TestId", out JsonElement _), "PascalCase property absent");
-                        }
+                        await RunToText(new[] { Fixtures.Suite("C", Fixtures.Passing("C", "A"), Fixtures.Passing("C", "B")) }, o => o.JsonResultsPath = path, ct);
+                        string first = await File.ReadAllTextAsync(path, ct);
+                        await RunToText(new[] { Fixtures.Suite("C", Fixtures.Passing("C", "A")) }, o => o.JsonResultsPath = path, ct);
+                        string second = await File.ReadAllTextAsync(path, ct);
+                        TestAssert.Contains("C.B", first, "first run");
+                        TestAssert.DoesNotContain("C.B", second, "overwritten");
+                        await RunToText(new[] { Fixtures.Suite("C", Fixtures.Passing("C", "A")) }, o => o.JsonResultsPath = string.Empty, ct);
                     }
                     finally
                     {
-                        if (File.Exists(path)) File.Delete(path);
+                        File.Delete(path);
                     }
                 }),
-
-                CaseBuilder.Async(S, "EmptyResultsPathSkipsExport", "ConsoleRunner does not export when the results path is empty", async ct =>
+                Check.Async(S, "CRUN-09", "HTML is written when a path is set", async ct =>
                 {
-                    int exitCode = await ConsoleRunner.RunAsync(
-                        Suites(Fixtures.Suite("X", Fixtures.Passing("X", "A"))),
-                        QuietSink(), string.Empty, ct).ConfigureAwait(false);
-                    TestAssert.Equal(0, exitCode, "exit code");
-                }),
-
-                CaseBuilder.Async(S, "ExportOverwritesExistingFile", "ConsoleRunner overwrites an existing results file", async ct =>
-                {
-                    string path = Path.Combine(Path.GetTempPath(), "touchstone-test-" + Guid.NewGuid().ToString("N") + ".json");
+                    string path = Path.Combine(Path.GetTempPath(), "touchstone-" + Guid.NewGuid().ToString("N") + ".html");
                     try
                     {
-                        await File.WriteAllTextAsync(path, "stale content that is not json", ct).ConfigureAwait(false);
-                        await ConsoleRunner.RunAsync(
-                            Suites(Fixtures.Suite("X", Fixtures.Passing("X", "A"))),
-                            QuietSink(), path, ct).ConfigureAwait(false);
-
-                        string json = await File.ReadAllTextAsync(path, ct).ConfigureAwait(false);
-                        using (JsonDocument doc = JsonDocument.Parse(json))
-                        {
-                            TestAssert.Equal(1, doc.RootElement.GetArrayLength(), "entry count");
-                        }
+                        await RunToText(new[] { Fixtures.Suite("C", Fixtures.Passing("C", "A")) }, o => { o.HtmlReportPath = path; o.RunId = "nightly"; }, ct);
+                        string html = await File.ReadAllTextAsync(path, ct);
+                        TestAssert.Contains("<!doctype html>", html, "document");
+                        TestAssert.Contains("nightly", html, "run id");
                     }
                     finally
                     {
-                        if (File.Exists(path)) File.Delete(path);
+                        File.Delete(path);
                     }
                 }),
-
-                CaseBuilder.Async(S, "InvalidResultsPathThrows", "ConsoleRunner propagates an error when the results directory does not exist", async ct =>
+                Check.Async(S, "CRUN-10", "A missing results directory fails after the console summary is written", async ct =>
                 {
-                    string path = Path.Combine(Path.GetTempPath(), "touchstone-missing-" + Guid.NewGuid().ToString("N"), "results.json");
-                    await TestAssert.ThrowsAsync<DirectoryNotFoundException>(
-                        () => ConsoleRunner.RunAsync(
-                            Suites(Fixtures.Suite("X", Fixtures.Passing("X", "A"))),
-                            QuietSink(), path, ct),
-                        "missing directory").ConfigureAwait(false);
-                }),
-
-                CaseBuilder.Async(S, "TokenForwarded", "ConsoleRunner forwards the cancellation token to test cases", async _ =>
-                {
-                    using (CancellationTokenSource cts = new CancellationTokenSource())
+                    using (StringWriter writer = new StringWriter())
                     {
-                        CancellationToken seen = CancellationToken.None;
-                        await ConsoleRunner.RunAsync(
-                            Suites(Fixtures.Suite("X", Fixtures.Passing("X", "A", t => seen = t))),
-                            QuietSink(), null, cts.Token).ConfigureAwait(false);
-                        TestAssert.True(seen == cts.Token, "case received the caller token");
+                        string path = Path.Combine(Path.GetTempPath(), "touchstone-missing-" + Guid.NewGuid().ToString("N"), "results.json");
+                        ConsoleRunnerOptions options = new ConsoleRunnerOptions { Writer = writer, UseColor = false, JsonResultsPath = path };
+                        await TestAssert.ThrowsAsync<DirectoryNotFoundException>(() => ConsoleRunner.RunAsync(new[] { Fixtures.Suite("C", Fixtures.Passing("C", "A")) }, options, ct), "export");
+                        TestAssert.Contains("OVERALL", writer.ToString(), "summary written first");
                     }
+                }),
+                Check.Async(S, "CRUN-11", "Additional sinks receive every callback", async ct =>
+                {
+                    RecordingSink extra = new RecordingSink();
+                    await RunToText(new[] { Fixtures.Suite("C", Fixtures.Scenario("C", "Scn", (c, t) => Task.CompletedTask)) }, o => o.AdditionalSinks.Add(extra), ct);
+                    TestAssert.Equal("run_started:1|suite_started:C|case_started:C.Scn|step_started:C.Scn/act|step_completed:C.Scn/act=Passed|case_completed:C.Scn=Passed|suite_completed:C|run_completed:run",
+                        string.Join("|", extra.Events), "events");
+                }),
+                Check.Async(S, "CRUN-12", "Run options are honored", async ct =>
+                {
+                    StrongBox<int> code = new StrongBox<int>();
+                    string text = await RunToText(new[] { Fixtures.Suite("C", Fixtures.Failing("C", "A"), Fixtures.Passing("C", "B", null, new[] { "x" }), Fixtures.Skipped("C", "D")) }, o =>
+                    {
+                        o.Run.StopOnFirstFailure = true;
+                        o.Run.SkipBehavior = SkipBehavior.Omit;
+                    }, ct, code);
+                    TestAssert.Contains("NOT RUN", text, "stopped");
+                    TestAssert.Contains("Filtered: 1", text, "omitted");
+                    TestAssert.Equal(1, code.Value, "code");
                 }),
             });
         }
 
-        private static ConsoleResultSink QuietSink()
+        private static TestSuiteDescriptor ArgumentSuite()
         {
-            return new ConsoleResultSink(new StringWriter(), useColor: false);
-        }
-
-        private static IReadOnlyList<TestSuiteDescriptor> Suites(params TestSuiteDescriptor[] suites)
-        {
-            return new List<TestSuiteDescriptor>(suites);
-        }
-
-        private static TestResult Result(string displayName, bool success, bool skipped = false)
-        {
-            return new TestResult
+            const string S = "Arguments";
+            return new TestSuiteDescriptor(S, "Command-line arguments", new[]
             {
-                TestId = "S." + displayName,
-                SuiteId = "S",
-                CaseId = displayName,
-                DisplayName = displayName,
-                Success = success,
-                Skipped = skipped,
-            };
-        }
-
-        private static string[] Lines(StringWriter writer)
-        {
-            string text = writer.ToString().Replace("\r\n", "\n");
-            if (text.EndsWith("\n", StringComparison.Ordinal))
-                text = text.Substring(0, text.Length - 1);
-            return text.Length == 0 ? Array.Empty<string>() : text.Split('\n');
+                Check.Sync(S, "ARGS-01", "No arguments parse to defaults", () =>
+                {
+                    ConsoleRunnerOptions o = ConsoleRunnerOptions.Parse(Array.Empty<string>());
+                    TestAssert.True(o.Run.Filter.IsEmpty, "filter");
+                    TestAssert.Equal(SkipBehavior.Report, o.Run.SkipBehavior, "skip");
+                    TestAssert.False(o.Run.StopOnFirstFailure, "stop");
+                    TestAssert.False(o.ExpandSteps, "expand");
+                    TestAssert.Null(o.UseColor, "color");
+                    TestAssert.Null(o.JsonResultsPath, "json");
+                    TestAssert.Null(o.HtmlReportPath, "html");
+                    TestAssert.False(o.ShowHelp, "help");
+                }),
+                Check.Sync(S, "ARGS-02", "--tag and --exclude-tag accept repeated and comma-separated values", () =>
+                {
+                    ConsoleRunnerOptions o = ConsoleRunnerOptions.Parse(new[] { "--tag", "a,b", "--tag", "c", "--exclude-tag", "d, e" });
+                    TestAssert.Equal("a,b,c", string.Join(",", o.Run.Filter.IncludeTags), "include");
+                    TestAssert.Equal("d,e", string.Join(",", o.Run.Filter.ExcludeTags), "exclude");
+                }),
+                Check.Sync(S, "ARGS-03", "--suite and --test populate the filter", () =>
+                {
+                    ConsoleRunnerOptions o = ConsoleRunnerOptions.Parse(new[] { "--suite", "A,B", "--test", "A.One" });
+                    TestAssert.Equal("A,B", string.Join(",", o.Run.Filter.SuiteIds), "suites");
+                    TestAssert.Equal("A.One", string.Join(",", o.Run.Filter.TestIds), "tests");
+                }),
+                Check.Sync(S, "ARGS-04", "--skip accepts report, omit, and fail in any case", () =>
+                {
+                    TestAssert.Equal(SkipBehavior.Report, ConsoleRunnerOptions.Parse(new[] { "--skip", "REPORT" }).Run.SkipBehavior, "report");
+                    TestAssert.Equal(SkipBehavior.Omit, ConsoleRunnerOptions.Parse(new[] { "--skip", "omit" }).Run.SkipBehavior, "omit");
+                    TestAssert.Equal(SkipBehavior.Fail, ConsoleRunnerOptions.Parse(new[] { "--skip", "Fail" }).Run.SkipBehavior, "fail");
+                }),
+                Check.Sync(S, "ARGS-05", "Flags set their options", () =>
+                {
+                    ConsoleRunnerOptions o = ConsoleRunnerOptions.Parse(new[] { "--stop-on-failure", "--expand", "--no-color" });
+                    TestAssert.True(o.Run.StopOnFirstFailure, "stop");
+                    TestAssert.True(o.ExpandSteps, "expand");
+                    TestAssert.Equal(false, o.UseColor, "color");
+                }),
+                Check.Sync(S, "ARGS-06", "--results and --html set the paths", () =>
+                {
+                    ConsoleRunnerOptions o = ConsoleRunnerOptions.Parse(new[] { "--results", "r.json", "--html", "r.html" });
+                    TestAssert.Equal("r.json", o.JsonResultsPath, "json");
+                    TestAssert.Equal("r.html", o.HtmlReportPath, "html");
+                }),
+                Check.Sync(S, "ARGS-07", "An unknown option names itself", () =>
+                {
+                    TestAssert.Contains("--nope", TestAssert.Throws<ConsoleArgumentException>(() => ConsoleRunnerOptions.Parse(new[] { "--nope" }), "unknown").Message, "message");
+                }),
+                Check.Sync(S, "ARGS-08", "An option missing its value is rejected", () =>
+                {
+                    TestAssert.Throws<ConsoleArgumentException>(() => ConsoleRunnerOptions.Parse(new[] { "--tag" }), "end of args");
+                    TestAssert.Throws<ConsoleArgumentException>(() => ConsoleRunnerOptions.Parse(new[] { "--results", "--expand" }), "followed by option");
+                }),
+                Check.Sync(S, "ARGS-09", "Invalid --skip values and invalid tags are rejected", () =>
+                {
+                    TestAssert.Throws<ConsoleArgumentException>(() => ConsoleRunnerOptions.Parse(new[] { "--skip", "maybe" }), "skip");
+                    TestAssert.Throws<ConsoleArgumentException>(() => ConsoleRunnerOptions.Parse(new[] { "--tag", "bad tag" }), "tag");
+                    TestAssert.Throws<ConsoleArgumentException>(() => ConsoleRunnerOptions.Parse(new[] { "--suite", "a.b" }), "suite");
+                    TestAssert.Throws<ConsoleArgumentException>(() => ConsoleRunnerOptions.Parse(new[] { "--tag", "a,,b" }), "empty item");
+                }),
+                Check.Sync(S, "ARGS-10", "--help sets ShowHelp", () =>
+                {
+                    TestAssert.True(ConsoleRunnerOptions.Parse(new[] { "--help" }).ShowHelp, "--help");
+                    TestAssert.True(ConsoleRunnerOptions.Parse(new[] { "-h" }).ShowHelp, "-h");
+                }),
+                Check.Sync(S, "ARGS-11", "A null argument array is rejected", () =>
+                {
+                    TestAssert.Throws<ArgumentNullException>(() => ConsoleRunnerOptions.Parse(null!), "null");
+                    TestAssert.Throws<ConsoleArgumentException>(() => ConsoleRunnerOptions.Parse(new string[] { null! }), "null element");
+                }),
+            });
         }
     }
 }

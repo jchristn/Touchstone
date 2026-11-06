@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>disable</ImplicitUsings>
-    <Description>Console test runner for Touchstone. Colored tabular output with pass/fail/skip rendering, JSON export, and CI-friendly exit codes.</Description>
+    <TouchstoneShipping>true</TouchstoneShipping>
+    <IsAotCompatible>true</IsAotCompatible>
+    <Description>Console test runner for Touchstone. Tabular console output, command-line filtering, JSON results (schema 1.0, included in the package), offline HTML reports, and stable exit codes.</Description>
     <PackageTags>testing;test-runner;console;cli</PackageTags>
   </PropertyGroup>
 
@@ -14,6 +14,11 @@
   <ItemGroup>
     <None Include="..\..\assets\logo-black.png" Pack="true" PackagePath="\" />
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\schemas\touchstone-results-1.0.schema.json" Pack="true" PackagePath="schemas\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\schemas\touchstone-results-1.0.schema.json" LogicalName="Touchstone.Cli.touchstone-results-1.0.schema.json" />
   </ItemGroup>
 
 </Project>

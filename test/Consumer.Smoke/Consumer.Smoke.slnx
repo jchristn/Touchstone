@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="Smoke.Shared/Smoke.Shared.csproj" />
+  <Project Path="Smoke.Console/Smoke.Console.csproj" />
+  <Project Path="Smoke.Xunit2/Smoke.Xunit2.csproj" />
+  <Project Path="Smoke.Xunit3/Smoke.Xunit3.csproj" />
+  <Project Path="Smoke.Nunit/Smoke.Nunit.csproj" />
+  <Project Path="Smoke.Mstest/Smoke.Mstest.csproj" />
+</Solution>

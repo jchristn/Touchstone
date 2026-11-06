@@ -1,3 +1,15 @@
+# Improvements
+
+## After 1.0.0
+
+| Work | Notes |
+|---|---|
+| Set `PackageValidationBaselineVersion` to 1.0.0 | Makes package validation fail on any breaking change against the shipped 1.0.0 packages. Release step 10 in V1.0_PLAN.md. |
+| `TestRunOptions.CaseTimeout` | Per-case timeout. Additive property; reserved in the 1.0 design. |
+| `TestRunOptions.MaxDegreeOfParallelism` | Parallel case execution. Additive property; reserved in the 1.0 design. |
+| Sample MSTest host duration | `Touchstone.SampleApp.Tests.Mstest` takes about 44 seconds for 11 cases, while the NUnit and xUnit sample hosts take 5 to 8 seconds for the same suites. Investigate WebApplicationFactory start-up under MSTest. |
+| Sample suite resources | `SampleAppSuites` creates `WebApplicationFactory` instances while building suites and disposes them in `afterSuiteAsync`, which one-test-per-case hosts never run. Move them into scenario contexts or lazy fixtures. |
+
 # Benchmark follow-up
 
 | Priority | Work | Evidence needed | Status |

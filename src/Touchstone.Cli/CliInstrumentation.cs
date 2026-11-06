@@ -15,6 +15,8 @@ namespace Touchstone.Cli
     {
         internal const string FormatJson = "json";
 
+        internal const string FormatHtml = "html";
+
         private const int MaxExceptionMessageLength = 4096;
 
         private static readonly string _Version = typeof(CliInstrumentation).Assembly.GetName().Version?.ToString() ?? "unknown";
@@ -30,7 +32,8 @@ namespace Touchstone.Cli
         {
             try
             {
-                Activity? activity = _Source.StartActivity(TouchstoneTelemetry.ExportSpanPrefix + format, ActivityKind.Internal);
+                Activity? activity = _Source.StartActivity(TouchstoneTelemetry.ExportSpanName, ActivityKind.Internal);
+                activity?.SetTag(TouchstoneTelemetry.LabelFormat, format);
                 activity?.SetTag(TouchstoneTelemetry.AttributeResultCount, resultCount);
                 return activity;
             }
@@ -84,6 +87,7 @@ namespace Touchstone.Cli
             }
             catch
             {
+                // Telemetry must never change test outcomes.
             }
         }
     }

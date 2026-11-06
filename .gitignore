@@ -47,3 +47,10 @@ Desktop.ini
 *.bak
 *.swp
 *~
+
+# Verification script results (scripts/*.py default output paths)
+/parity-results.json
+/smoke-results.json
+/docs-results.json
+/hosts-results.json
+/hosts-results-aot-cases.json

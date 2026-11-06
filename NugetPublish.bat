@@ -6,13 +6,13 @@ if "%~1"=="" (
 )
 
 set APIKEY=%~1
-set VERSION=0.3.0-alpha
+for /f "tokens=3 delims=<>" %%V in ('findstr /r "<Version>" Directory.Build.props') do set VERSION=%%V
 
 echo ============================================================================
 echo  Building Release
 echo ============================================================================
 echo.
-dotnet pack -c Release
+dotnet pack Touchstone.slnx -c Release
 if errorlevel 1 (
     echo Build failed.
     exit /b 1
@@ -36,11 +36,19 @@ dotnet nuget push src\Touchstone.Cli\bin\Release\Touchstone.Cli.%VERSION%.snupkg
 
 echo.
 echo ============================================================================
-echo  Publishing Touchstone.XunitAdapter
+echo  Publishing Touchstone.Xunit2Adapter
 echo ============================================================================
 echo.
-dotnet nuget push src\Touchstone.XunitAdapter\bin\Release\Touchstone.XunitAdapter.%VERSION%.nupkg -s nuget.org -k %APIKEY% --skip-duplicate
-dotnet nuget push src\Touchstone.XunitAdapter\bin\Release\Touchstone.XunitAdapter.%VERSION%.snupkg -s nuget.org -k %APIKEY% --skip-duplicate
+dotnet nuget push src\Touchstone.Xunit2Adapter\bin\Release\Touchstone.Xunit2Adapter.%VERSION%.nupkg -s nuget.org -k %APIKEY% --skip-duplicate
+dotnet nuget push src\Touchstone.Xunit2Adapter\bin\Release\Touchstone.Xunit2Adapter.%VERSION%.snupkg -s nuget.org -k %APIKEY% --skip-duplicate
+
+echo.
+echo ============================================================================
+echo  Publishing Touchstone.Xunit3Adapter
+echo ============================================================================
+echo.
+dotnet nuget push src\Touchstone.Xunit3Adapter\bin\Release\Touchstone.Xunit3Adapter.%VERSION%.nupkg -s nuget.org -k %APIKEY% --skip-duplicate
+dotnet nuget push src\Touchstone.Xunit3Adapter\bin\Release\Touchstone.Xunit3Adapter.%VERSION%.snupkg -s nuget.org -k %APIKEY% --skip-duplicate
 
 echo.
 echo ============================================================================

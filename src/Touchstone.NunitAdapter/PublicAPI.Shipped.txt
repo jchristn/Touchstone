@@ -1,0 +1,10 @@
+#nullable enable
+abstract Touchstone.NunitAdapter.TouchstoneNunitFactBase.Suites.get -> System.Collections.Generic.IReadOnlyList<Touchstone.Core.TestSuiteDescriptor!>!
+static Touchstone.NunitAdapter.TouchstoneNunit.ExecuteAsync(Touchstone.Core.TestCaseDescriptor! testCase, Touchstone.Core.TestRunOptions? options = null, System.IO.TextWriter? output = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+static Touchstone.NunitAdapter.TouchstoneNunitCases.From(System.Collections.Generic.IReadOnlyList<Touchstone.Core.TestSuiteDescriptor!>! suites, Touchstone.Core.TestRunOptions? options = null) -> System.Collections.Generic.IReadOnlyList<NUnit.Framework.TestCaseData!>!
+Touchstone.NunitAdapter.TouchstoneNunit
+Touchstone.NunitAdapter.TouchstoneNunitCases
+Touchstone.NunitAdapter.TouchstoneNunitFactBase
+Touchstone.NunitAdapter.TouchstoneNunitFactBase.RunAllAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Touchstone.NunitAdapter.TouchstoneNunitFactBase.TouchstoneNunitFactBase() -> void
+virtual Touchstone.NunitAdapter.TouchstoneNunitFactBase.Options.get -> Touchstone.Core.TestRunOptions?

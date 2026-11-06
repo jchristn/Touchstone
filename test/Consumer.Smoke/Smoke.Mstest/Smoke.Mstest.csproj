@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Smoke.Shared\Smoke.Shared.csproj" />
+    <PackageReference Include="Touchstone.MstestAdapter" Version="$(TouchstoneVersion)" />
+    <PackageReference Include="MSTest" Version="4.4.1" />
+  </ItemGroup>
+
+</Project>

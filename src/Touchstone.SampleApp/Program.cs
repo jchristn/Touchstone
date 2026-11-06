@@ -1,3 +1,6 @@
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Touchstone.SampleApp;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
@@ -18,7 +21,7 @@ app.MapPost("/notes", (CreateNoteRequest request, NoteStore store) =>
 
 app.MapGet("/notes/{id}", (string id, NoteStore store) =>
 {
-    Note note = store.Get(id);
+    Note? note = store.Get(id);
     return note != null ? Results.Ok(note) : Results.NotFound();
 });
 

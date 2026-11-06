@@ -6,445 +6,40 @@ namespace Test.Shared
     using System.Diagnostics.Metrics;
     using System.IO;
     using System.Linq;
+    using System.Reflection;
     using System.Threading;
     using System.Threading.Tasks;
+
     using Touchstone.Cli;
     using Touchstone.Core;
 
     /// <summary>
-    /// Suites proving that Touchstone emits its documented spans and metrics (see TELEMETRY.md), including failure paths.
-    /// Every case serializes on a shared gate because <see cref="TouchstoneTelemetry.SuiteLabelEnabled"/> is process-wide,
-    /// and every capture filters on its own trace id so concurrent runners in the same process cannot interfere.
+    /// Catalog section 11.21: telemetry. Cases run one at a time because some change process-wide settings.
     /// </summary>
     public static class TelemetrySuites
     {
         private static readonly SemaphoreSlim _Gate = new SemaphoreSlim(1, 1);
 
         /// <summary>
-        /// Suite covering spans and metrics emitted by <see cref="TestExecutor"/>, the adapters, and the console runner.
+        /// Every suite in this file.
         /// </summary>
-        /// <returns>Suite descriptor.</returns>
-        public static TestSuiteDescriptor TelemetrySuite()
+        /// <returns>The suites.</returns>
+        public static IEnumerable<TestSuiteDescriptor> All()
         {
-            const string S = "Telemetry";
-
-            return new TestSuiteDescriptor(S, "Telemetry", new List<TestCaseDescriptor>
-            {
-                Guarded(S, "SpanTree", "RunAsync emits run, suite, stage, case, and sink spans nested in one trace", async ct =>
-                {
-                    string id = UniqueSuiteId();
-                    using (TelemetryCapture capture = new TelemetryCapture())
-                    {
-                        await TestExecutor.RunAsync(new List<TestSuiteDescriptor> { MixedSuite(id) }, new RecordingSink(), ct).ConfigureAwait(false);
-
-                        Activity run = capture.Span(TouchstoneTelemetry.RunSpanName);
-                        Activity suite = capture.Span(TouchstoneTelemetry.SuiteSpanPrefix + id);
-                        Activity before = capture.Span(TouchstoneTelemetry.StageSpanPrefix + TouchstoneTelemetry.StageBeforeSuite);
-                        Activity after = capture.Span(TouchstoneTelemetry.StageSpanPrefix + TouchstoneTelemetry.StageAfterSuite);
-                        Activity pass = capture.Span(TouchstoneTelemetry.CaseSpanPrefix + id + ".Pass");
-                        Activity fail = capture.Span(TouchstoneTelemetry.CaseSpanPrefix + id + ".Fail");
-                        Activity skip = capture.Span(TouchstoneTelemetry.CaseSpanPrefix + id + ".Skip");
-
-                        TestAssert.Equal(capture.Root.SpanId, run.ParentSpanId, "run parent");
-                        foreach (Activity child in new[] { before, after, pass, fail, skip })
-                            TestAssert.Equal(suite.SpanId, child.ParentSpanId, child.DisplayName + " parent");
-                        TestAssert.Equal(run.SpanId, suite.ParentSpanId, "suite parent");
-
-                        TestAssert.Equal(ActivityStatusCode.Error, run.Status, "run status");
-                        TestAssert.Equal(TouchstoneTelemetry.OutcomeFailed, run.GetTagItem(TouchstoneTelemetry.AttributeOutcome), "run outcome");
-                        TestAssert.Equal(3, run.GetTagItem(TouchstoneTelemetry.AttributeCaseCount), "run case count");
-                        TestAssert.Equal(1, run.GetTagItem(TouchstoneTelemetry.AttributeFailedCount), "run failed count");
-                        TestAssert.Equal(ActivityStatusCode.Error, suite.Status, "suite status");
-                        TestAssert.Equal(id, suite.GetTagItem(TouchstoneTelemetry.AttributeSuiteId), "suite id attribute");
-                        TestAssert.Equal(ActivityStatusCode.Ok, before.Status, "before status");
-                        TestAssert.Equal(ActivityStatusCode.Ok, after.Status, "after status");
-
-                        TestAssert.Equal(ActivityStatusCode.Ok, pass.Status, "pass status");
-                        TestAssert.Equal(id + ".Pass", pass.GetTagItem(TouchstoneTelemetry.AttributeTestId), "test id attribute");
-                        TestAssert.Equal("Pass", pass.GetTagItem(TouchstoneTelemetry.AttributeCaseId), "case id attribute");
-                        TestAssert.Equal(ActivityStatusCode.Error, fail.Status, "fail status");
-                        TestAssert.Equal("case broke", fail.StatusDescription, "fail status description");
-                        TestAssert.Equal(typeof(InvalidOperationException).FullName, fail.GetTagItem(TouchstoneTelemetry.LabelErrorType), "fail error.type");
-                        ActivityEvent exceptionEvent = fail.Events.Single(e => e.Name == "exception");
-                        TestAssert.Equal(typeof(InvalidOperationException).FullName, exceptionEvent.Tags.First(t => t.Key == "exception.type").Value, "exception.type");
-                        TestAssert.Equal(TouchstoneTelemetry.OutcomeSkipped, skip.GetTagItem(TouchstoneTelemetry.AttributeOutcome), "skip outcome");
-                        TestAssert.Equal("later", skip.GetTagItem(TouchstoneTelemetry.AttributeSkipReason), "skip reason");
-
-                        List<Activity> sinkSpans = capture.Spans().Where(a => a.DisplayName.StartsWith(TouchstoneTelemetry.SinkSpanPrefix, StringComparison.Ordinal)).ToList();
-                        TestAssert.Equal(5, sinkSpans.Count, "sink span count (start, 3 results, complete)");
-                        TestAssert.True(sinkSpans.All(a => a.ParentSpanId == suite.SpanId), "sink spans nest under the suite");
-                    }
-                }),
-
-                Guarded(S, "Metrics", "RunAsync records run, suite, stage, case, sink, and error metrics with bounded labels", async ct =>
-                {
-                    string id = UniqueSuiteId();
-                    using (TelemetryCapture capture = new TelemetryCapture())
-                    {
-                        await TestExecutor.RunAsync(new List<TestSuiteDescriptor> { MixedSuite(id) }, new RecordingSink(), ct).ConfigureAwait(false);
-
-                        CapturedMeasurement run = capture.Measurements(TouchstoneTelemetry.Runs).Single();
-                        TestAssert.Equal(TouchstoneTelemetry.OutcomeFailed, run.Tag(TouchstoneTelemetry.LabelOutcome), "run outcome");
-                        CapturedMeasurement runDuration = capture.Measurements(TouchstoneTelemetry.RunDuration).Single();
-                        TestAssert.Equal("s", runDuration.Unit, "run duration unit");
-                        TestAssert.True(runDuration.Value >= 0, "run duration non-negative");
-
-                        CapturedMeasurement suite = capture.Measurements(TouchstoneTelemetry.Suites).Single();
-                        TestAssert.Equal(id, suite.Tag(TouchstoneTelemetry.LabelSuite), "suite label");
-                        TestAssert.Equal(TouchstoneTelemetry.OutcomeFailed, suite.Tag(TouchstoneTelemetry.LabelOutcome), "suite outcome");
-                        TestAssert.Equal(1, capture.Measurements(TouchstoneTelemetry.SuiteDuration).Count, "suite duration count");
-
-                        List<CapturedMeasurement> cases = capture.Measurements(TouchstoneTelemetry.Cases);
-                        TestAssert.Equal(3, cases.Count, "case count");
-                        foreach (string outcome in new[] { TouchstoneTelemetry.OutcomePassed, TouchstoneTelemetry.OutcomeFailed, TouchstoneTelemetry.OutcomeSkipped })
-                            TestAssert.Equal(1, cases.Count(c => c.Tag(TouchstoneTelemetry.LabelOutcome) == outcome), "cases " + outcome);
-                        TestAssert.True(cases.All(c => c.Tag(TouchstoneTelemetry.LabelSuite) == id), "cases carry the suite label");
-                        TestAssert.True(cases.All(c => !c.Tags.ContainsKey(TouchstoneTelemetry.AttributeCaseId) && !c.Tags.ContainsKey("case")), "no case id on metrics");
-                        TestAssert.Equal(3, capture.Measurements(TouchstoneTelemetry.CaseDuration).Count, "case duration count");
-                        TestAssert.Equal("s", capture.Measurements(TouchstoneTelemetry.CaseDuration)[0].Unit, "case duration unit");
-
-                        List<CapturedMeasurement> active = capture.Measurements(TouchstoneTelemetry.CasesActive);
-                        TestAssert.Equal(4, active.Count, "active +1/-1 for two executed cases");
-                        TestAssert.Equal(0.0, active.Sum(a => a.Value), "active returns to zero");
-
-                        List<CapturedMeasurement> stages = capture.Measurements(TouchstoneTelemetry.Stages);
-                        TestAssert.Equal(2, stages.Count, "stage count");
-                        TestAssert.True(stages.All(s => s.Tag(TouchstoneTelemetry.LabelOutcome) == TouchstoneTelemetry.OutcomeOk), "stages ok");
-                        TestAssert.Equal(1, stages.Count(s => s.Tag(TouchstoneTelemetry.LabelStage) == TouchstoneTelemetry.StageBeforeSuite), "before_suite stage");
-                        TestAssert.Equal(2, capture.Measurements(TouchstoneTelemetry.StageDuration).Count, "stage duration count");
-
-                        List<CapturedMeasurement> sinkEvents = capture.Measurements(TouchstoneTelemetry.SinkEvents);
-                        TestAssert.Equal(5, sinkEvents.Count, "sink event count");
-                        TestAssert.Equal(3, sinkEvents.Count(e => e.Tag(TouchstoneTelemetry.LabelEvent) == TouchstoneTelemetry.EventTestCompleted), "test_completed events");
-                        TestAssert.Equal(5, capture.Measurements(TouchstoneTelemetry.SinkDuration).Count, "sink duration count");
-
-                        CapturedMeasurement error = capture.Measurements(TouchstoneTelemetry.Errors).Single();
-                        TestAssert.Equal(TouchstoneTelemetry.StageCase, error.Tag(TouchstoneTelemetry.LabelStage), "error stage");
-                        TestAssert.Equal(typeof(InvalidOperationException).FullName, error.Tag(TouchstoneTelemetry.LabelErrorType), "error.type");
-                    }
-                }),
-
-                Guarded(S, "PassingRunAndLastSuccess", "A passing run records outcome passed and updates the last-success gauges", async ct =>
-                {
-                    string id = UniqueSuiteId();
-                    using (TelemetryCapture capture = new TelemetryCapture())
-                    {
-                        double before = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0 - 1;
-                        TestRunSummary summary = await TestExecutor.RunAsync(
-                            new List<TestSuiteDescriptor> { Fixtures.Suite(id, Fixtures.Passing(id, "A")) }, null, ct).ConfigureAwait(false);
-                        TestAssert.True(summary.IsSuccess, "IsSuccess");
-
-                        TestAssert.Equal(TouchstoneTelemetry.OutcomePassed, capture.Measurements(TouchstoneTelemetry.Runs).Single().Tag(TouchstoneTelemetry.LabelOutcome), "run outcome");
-                        TestAssert.Equal(ActivityStatusCode.Ok, capture.Span(TouchstoneTelemetry.RunSpanName).Status, "run status");
-                        TestAssert.Equal(0, capture.Spans().Count(a => a.DisplayName.StartsWith(TouchstoneTelemetry.SinkSpanPrefix, StringComparison.Ordinal)), "no sink spans without a sink");
-
-                        CapturedMeasurement suiteSuccess = capture.Observe(TouchstoneTelemetry.SuiteLastSuccessTime)
-                            .Last(m => m.Tag(TouchstoneTelemetry.LabelSuite) == id);
-                        TestAssert.True(suiteSuccess.Value >= before, "suite last success is recent");
-                        TestAssert.Equal("s", suiteSuccess.Unit, "suite last success unit");
-                        CapturedMeasurement runSuccess = capture.Observe(TouchstoneTelemetry.RunLastSuccessTime).Last();
-                        TestAssert.True(runSuccess.Value >= before, "run last success is recent");
-                    }
-                }),
-
-                Guarded(S, "BuildInfo", "touchstone.build.info reports 1 with the version label", async ct =>
-                {
-                    using (TelemetryCapture capture = new TelemetryCapture())
-                    {
-                        await TestExecutor.RunSuiteAsync(Fixtures.Suite(UniqueSuiteId()), null, ct).ConfigureAwait(false);
-                        CapturedMeasurement info = capture.Observe(TouchstoneTelemetry.BuildInfo).Last();
-                        TestAssert.Equal(1.0, info.Value, "value");
-                        string? version = info.Tag(TouchstoneTelemetry.LabelVersion);
-                        TestAssert.True(!string.IsNullOrEmpty(version) && version != "unknown", "version label is set: " + version);
-                    }
-                }),
-
-                Guarded(S, "BeforeHookFailure", "A BeforeSuite failure records a failed stage, an error, and suite and run outcome error", async ct =>
-                {
-                    string id = UniqueSuiteId();
-                    TestSuiteDescriptor suite = new TestSuiteDescriptor(id, id,
-                        new List<TestCaseDescriptor> { Fixtures.Passing(id, "A") },
-                        beforeSuiteAsync: _ => throw new InvalidOperationException("setup failed"));
-
-                    using (TelemetryCapture capture = new TelemetryCapture())
-                    {
-                        await TestAssert.ThrowsAsync<InvalidOperationException>(
-                            () => TestExecutor.RunAsync(new List<TestSuiteDescriptor> { suite }, null, ct), "setup failure").ConfigureAwait(false);
-
-                        AssertStageFailure(capture, id, TouchstoneTelemetry.StageBeforeSuite, TouchstoneTelemetry.OutcomeError);
-                        TestAssert.Equal(0, capture.Measurements(TouchstoneTelemetry.Cases).Count, "no cases ran");
-                        List<CapturedMeasurement> errors = capture.Measurements(TouchstoneTelemetry.Errors);
-                        TestAssert.Equal(1, errors.Count(e => e.Tag(TouchstoneTelemetry.LabelStage) == TouchstoneTelemetry.StageRun), "run error recorded");
-                    }
-                }),
-
-                Guarded(S, "AfterHookFailure", "An AfterSuite failure records a failed stage and suite outcome error", async ct =>
-                {
-                    string id = UniqueSuiteId();
-                    TestSuiteDescriptor suite = new TestSuiteDescriptor(id, id,
-                        new List<TestCaseDescriptor> { Fixtures.Passing(id, "A") },
-                        afterSuiteAsync: _ => throw new InvalidOperationException("teardown failed"));
-
-                    using (TelemetryCapture capture = new TelemetryCapture())
-                    {
-                        await TestAssert.ThrowsAsync<InvalidOperationException>(
-                            () => TestExecutor.RunAsync(new List<TestSuiteDescriptor> { suite }, null, ct), "teardown failure").ConfigureAwait(false);
-
-                        AssertStageFailure(capture, id, TouchstoneTelemetry.StageAfterSuite, TouchstoneTelemetry.OutcomeError);
-                        TestAssert.Equal(1, capture.Measurements(TouchstoneTelemetry.Cases).Count, "case ran before teardown");
-                    }
-                }),
-
-                Guarded(S, "CanceledOutcome", "An OperationCanceledException escaping a suite records outcome canceled", async ct =>
-                {
-                    string id = UniqueSuiteId();
-                    TestSuiteDescriptor suite = new TestSuiteDescriptor(id, id,
-                        new List<TestCaseDescriptor> { Fixtures.Passing(id, "A") },
-                        beforeSuiteAsync: _ => throw new OperationCanceledException("stop"));
-
-                    using (TelemetryCapture capture = new TelemetryCapture())
-                    {
-                        await TestAssert.ThrowsAsync<OperationCanceledException>(
-                            () => TestExecutor.RunAsync(new List<TestSuiteDescriptor> { suite }, null, ct), "canceled run").ConfigureAwait(false);
-
-                        TestAssert.Equal(TouchstoneTelemetry.OutcomeCanceled, capture.Measurements(TouchstoneTelemetry.Suites).Single().Tag(TouchstoneTelemetry.LabelOutcome), "suite outcome");
-                        TestAssert.Equal(TouchstoneTelemetry.OutcomeCanceled, capture.Measurements(TouchstoneTelemetry.Runs).Single().Tag(TouchstoneTelemetry.LabelOutcome), "run outcome");
-                    }
-                }),
-
-                Guarded(S, "SinkFailure", "A throwing sink records a failed sink event, a sink error, and suite outcome error", async ct =>
-                {
-                    string id = UniqueSuiteId();
-                    RecordingSink sink = new RecordingSink(_ => throw new IOException("sink down"));
-
-                    using (TelemetryCapture capture = new TelemetryCapture())
-                    {
-                        await TestAssert.ThrowsAsync<IOException>(
-                            () => TestExecutor.RunSuiteAsync(Fixtures.Suite(id, Fixtures.Passing(id, "A")), sink, ct), "sink failure").ConfigureAwait(false);
-
-                        CapturedMeasurement failedEvent = capture.Measurements(TouchstoneTelemetry.SinkEvents)
-                            .Single(e => e.Tag(TouchstoneTelemetry.LabelOutcome) == TouchstoneTelemetry.OutcomeFailed);
-                        TestAssert.Equal(TouchstoneTelemetry.EventTestCompleted, failedEvent.Tag(TouchstoneTelemetry.LabelEvent), "failed sink event");
-                        CapturedMeasurement error = capture.Measurements(TouchstoneTelemetry.Errors).Single();
-                        TestAssert.Equal(TouchstoneTelemetry.StageSink, error.Tag(TouchstoneTelemetry.LabelStage), "error stage");
-                        TestAssert.Equal(typeof(IOException).FullName, error.Tag(TouchstoneTelemetry.LabelErrorType), "error.type");
-                        TestAssert.Equal(TouchstoneTelemetry.OutcomeError, capture.Measurements(TouchstoneTelemetry.Suites).Single().Tag(TouchstoneTelemetry.LabelOutcome), "suite outcome");
-
-                        Activity sinkSpan = capture.Span(TouchstoneTelemetry.SinkSpanPrefix + TouchstoneTelemetry.EventTestCompleted);
-                        TestAssert.Equal(ActivityStatusCode.Error, sinkSpan.Status, "sink span status");
-                        TestAssert.Equal(ActivityStatusCode.Error, capture.Span(TouchstoneTelemetry.SuiteSpanPrefix + id).Status, "suite span status");
-                    }
-                }),
-
-                Guarded(S, "ExecuteCaseAsync", "ExecuteCaseAsync emits a case span and metrics, rethrows the original exception, and skips skipped cases", async ct =>
-                {
-                    string id = UniqueSuiteId();
-                    InvalidOperationException thrown = new InvalidOperationException("direct failure");
-                    TestCaseDescriptor failing = new TestCaseDescriptor(id, "Bad", "Bad", _ => throw thrown);
-
-                    using (TelemetryCapture capture = new TelemetryCapture())
-                    {
-                        await TestExecutor.ExecuteCaseAsync(Fixtures.Passing(id, "Good"), ct).ConfigureAwait(false);
-                        InvalidOperationException caught = await TestAssert.ThrowsAsync<InvalidOperationException>(
-                            () => TestExecutor.ExecuteCaseAsync(failing, ct), "failing case").ConfigureAwait(false);
-                        TestAssert.Same(thrown, caught, "original exception rethrown");
-                        await TestExecutor.ExecuteCaseAsync(Fixtures.Skipped(id, "Later"), ct).ConfigureAwait(false);
-
-                        Activity good = capture.Span(TouchstoneTelemetry.CaseSpanPrefix + id + ".Good");
-                        TestAssert.Equal(capture.Root.SpanId, good.ParentSpanId, "case span parent is the caller's activity");
-                        TestAssert.Equal(ActivityStatusCode.Error, capture.Span(TouchstoneTelemetry.CaseSpanPrefix + id + ".Bad").Status, "failing status");
-
-                        List<CapturedMeasurement> cases = capture.Measurements(TouchstoneTelemetry.Cases);
-                        TestAssert.Equal(3, cases.Count, "case measurements");
-                        TestAssert.Equal(1, cases.Count(c => c.Tag(TouchstoneTelemetry.LabelOutcome) == TouchstoneTelemetry.OutcomeSkipped), "skipped measurement");
-                        TestAssert.Equal(0, capture.Measurements(TouchstoneTelemetry.Runs).Count, "no run measurement");
-                    }
-
-                    await TestAssert.ThrowsAsync<ArgumentNullException>(
-                        () => TestExecutor.ExecuteCaseAsync(null!, ct), "null case").ConfigureAwait(false);
-                }),
-
-                Guarded(S, "ContextPropagation", "The case span is current inside the case body, so outbound calls inherit its W3C traceparent", async ct =>
-                {
-                    string id = UniqueSuiteId();
-                    Activity? seen = null;
-                    Dictionary<string, string> headers = new Dictionary<string, string>();
-                    TestCaseDescriptor probe = new TestCaseDescriptor(id, "Probe", "Probe", async _ =>
-                    {
-                        await Task.Yield();
-                        seen = Activity.Current;
-                        DistributedContextPropagator.Current.Inject(seen, headers, (carrier, key, value) =>
-                        {
-                            if (carrier is Dictionary<string, string> map && value != null) map[key] = value;
-                        });
-                    });
-
-                    using (TelemetryCapture capture = new TelemetryCapture())
-                    {
-                        await TestExecutor.RunAsync(new List<TestSuiteDescriptor> { Fixtures.Suite(id, probe) }, null, ct).ConfigureAwait(false);
-
-                        Activity caseSpan = capture.Span(TouchstoneTelemetry.CaseSpanPrefix + id + ".Probe");
-                        TestAssert.Same(caseSpan, seen, "Activity.Current inside the body is the case span");
-                        TestAssert.Equal(ActivityIdFormat.W3C, caseSpan.IdFormat, "W3C id format");
-                        TestAssert.True(headers.ContainsKey("traceparent"), "traceparent injected");
-                        TestAssert.Contains(capture.TraceId.ToHexString(), headers["traceparent"], "traceparent trace id");
-                        TestAssert.Contains(caseSpan.SpanId.ToHexString(), headers["traceparent"], "traceparent span id");
-                    }
-                }),
-
-                Guarded(S, "AdaptersEmit", "xUnit, NUnit, and MSTest RunAllAsync emit a run span and case metrics", async ct =>
-                {
-                    List<Func<IReadOnlyList<TestSuiteDescriptor>, CancellationToken, Task>> runners = new List<Func<IReadOnlyList<TestSuiteDescriptor>, CancellationToken, Task>>
-                    {
-                        (suites, t) => new XunitFactHarness(suites).InvokeRunAllAsync(t),
-                        (suites, t) => new NunitBaseHarness(suites).InvokeRunAllAsync(t),
-                        (suites, t) => new MstestBaseHarness(suites).InvokeRunAllAsync(t),
-                    };
-
-                    foreach (Func<IReadOnlyList<TestSuiteDescriptor>, CancellationToken, Task> runAll in runners)
-                    {
-                        string id = UniqueSuiteId();
-                        using (TelemetryCapture capture = new TelemetryCapture())
-                        {
-                            await TestAssert.ThrowsAsync<AggregateException>(
-                                () => runAll(new List<TestSuiteDescriptor> { Fixtures.Suite(id, Fixtures.Passing(id, "A"), Fixtures.Failing(id, "B", "adapter failure")) }, ct),
-                                "adapter run").ConfigureAwait(false);
-
-                            Activity run = capture.Span(TouchstoneTelemetry.RunSpanName);
-                            TestAssert.Equal(ActivityStatusCode.Error, run.Status, "run status");
-                            TestAssert.Equal(2, capture.Measurements(TouchstoneTelemetry.Cases).Count, "case measurements");
-                            TestAssert.Equal(1, capture.Measurements(TouchstoneTelemetry.Errors).Count, "error measurements");
-                        }
-                    }
-                }),
-
-                Guarded(S, "CliExport", "ConsoleRunner emits run and export telemetry, including a failed export with its error.type", async ct =>
-                {
-                    string id = UniqueSuiteId();
-                    string path = Path.Combine(Path.GetTempPath(), "touchstone-telemetry-" + Guid.NewGuid().ToString("N") + ".json");
-                    string badPath = Path.Combine(Path.GetTempPath(), "touchstone-missing-" + Guid.NewGuid().ToString("N"), "results.json");
-
-                    try
-                    {
-                        using (TelemetryCapture capture = new TelemetryCapture())
-                        {
-                            int exit = await ConsoleRunner.RunAsync(
-                                new List<TestSuiteDescriptor> { Fixtures.Suite(id, Fixtures.Passing(id, "A")) },
-                                new ConsoleResultSink(new StringWriter(), useColor: false), path, ct).ConfigureAwait(false);
-                            TestAssert.Equal(0, exit, "exit code");
-
-                            TestAssert.Equal(1, capture.Measurements(TouchstoneTelemetry.Runs).Count, "run measurement");
-                            CapturedMeasurement export = capture.Measurements(TouchstoneTelemetry.Exports).Single();
-                            TestAssert.Equal("json", export.Tag(TouchstoneTelemetry.LabelFormat), "format");
-                            TestAssert.Equal(TouchstoneTelemetry.OutcomeOk, export.Tag(TouchstoneTelemetry.LabelOutcome), "outcome");
-                            TestAssert.Equal("s", capture.Measurements(TouchstoneTelemetry.ExportDuration).Single().Unit, "export duration unit");
-                            Activity span = capture.Span(TouchstoneTelemetry.ExportSpanPrefix + "json");
-                            TestAssert.Equal(ActivityStatusCode.Ok, span.Status, "export status");
-                            TestAssert.Equal(1, span.GetTagItem(TouchstoneTelemetry.AttributeResultCount), "result count");
-                        }
-
-                        using (TelemetryCapture capture = new TelemetryCapture())
-                        {
-                            await TestAssert.ThrowsAsync<DirectoryNotFoundException>(
-                                () => ConsoleRunner.RunAsync(
-                                    new List<TestSuiteDescriptor> { Fixtures.Suite(id, Fixtures.Passing(id, "A")) },
-                                    new ConsoleResultSink(new StringWriter(), useColor: false), badPath, ct),
-                                "bad export path").ConfigureAwait(false);
-
-                            CapturedMeasurement export = capture.Measurements(TouchstoneTelemetry.Exports).Single();
-                            TestAssert.Equal(TouchstoneTelemetry.OutcomeFailed, export.Tag(TouchstoneTelemetry.LabelOutcome), "outcome");
-                            TestAssert.Equal(typeof(DirectoryNotFoundException).FullName, export.Tag(TouchstoneTelemetry.LabelErrorType), "error.type");
-                            TestAssert.Equal(ActivityStatusCode.Error, capture.Span(TouchstoneTelemetry.ExportSpanPrefix + "json").Status, "export status");
-                        }
-                    }
-                    finally
-                    {
-                        if (File.Exists(path)) File.Delete(path);
-                    }
-                }),
-
-                Guarded(S, "SuiteLabelDisabled", "SuiteLabelEnabled=false drops the suite label from metrics but keeps it on spans", async ct =>
-                {
-                    string id = UniqueSuiteId();
-                    bool previous = TouchstoneTelemetry.SuiteLabelEnabled;
-                    TouchstoneTelemetry.SuiteLabelEnabled = false;
-
-                    try
-                    {
-                        using (TelemetryCapture capture = new TelemetryCapture())
-                        {
-                            await TestExecutor.RunSuiteAsync(Fixtures.Suite(id, Fixtures.Passing(id, "A")), null, ct).ConfigureAwait(false);
-
-                            TestAssert.False(capture.Measurements(TouchstoneTelemetry.Cases).Single().Tags.ContainsKey(TouchstoneTelemetry.LabelSuite), "case metric has no suite label");
-                            TestAssert.False(capture.Measurements(TouchstoneTelemetry.Suites).Single().Tags.ContainsKey(TouchstoneTelemetry.LabelSuite), "suite metric has no suite label");
-                            TestAssert.Equal(id, capture.Span(TouchstoneTelemetry.SuiteSpanPrefix + id).GetTagItem(TouchstoneTelemetry.AttributeSuiteId), "span keeps suite id");
-                        }
-                    }
-                    finally
-                    {
-                        TouchstoneTelemetry.SuiteLabelEnabled = previous;
-                    }
-                }),
-
-                Guarded(S, "NoListener", "Execution without any subscribed listener behaves identically and does not throw", async ct =>
-                {
-                    Activity.Current = null;
-                    string id = UniqueSuiteId();
-                    TestRunSummary summary = await TestExecutor.RunAsync(new List<TestSuiteDescriptor>
-                    {
-                        Fixtures.Suite(id, Fixtures.Passing(id, "A"), Fixtures.Failing(id, "B", "b"), Fixtures.Skipped(id, "C")),
-                    }, new RecordingSink(), ct).ConfigureAwait(false);
-
-                    TestAssert.Equal(3, summary.Total, "Total");
-                    TestAssert.Equal(1, summary.Passed, "Passed");
-                    TestAssert.Equal(1, summary.Failed, "Failed");
-                    TestAssert.Equal(1, summary.Skipped, "Skipped");
-                    await TestExecutor.ExecuteCaseAsync(Fixtures.Passing(id, "D"), ct).ConfigureAwait(false);
-                }),
-
-                Guarded(S, "ListenerFailureIsolated", "A collector that throws while recording never changes test outcomes", async ct =>
-                {
-                    string id = UniqueSuiteId();
-                    using (TelemetryCapture capture = new TelemetryCapture())
-                    using (MeterListener faulty = new MeterListener())
-                    using (ActivityListener faultyTraces = new ActivityListener())
-                    {
-                        ActivityTraceId trace = capture.TraceId;
-                        faulty.InstrumentPublished = (instrument, listener) =>
-                        {
-                            if (instrument.Meter.Name == TouchstoneTelemetry.MeterName)
-                                listener.EnableMeasurementEvents(instrument);
-                        };
-                        faulty.SetMeasurementEventCallback<double>((i, v, t, s) => ThrowInTrace(trace));
-                        faulty.SetMeasurementEventCallback<long>((i, v, t, s) => ThrowInTrace(trace));
-                        faulty.Start();
-
-                        faultyTraces.ShouldListenTo = s => s.Name == TouchstoneTelemetry.ActivitySourceName;
-                        faultyTraces.Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded;
-                        faultyTraces.ActivityStopped = a =>
-                        {
-                            if (a.TraceId == trace) throw new InvalidOperationException("faulty trace exporter");
-                        };
-                        ActivitySource.AddActivityListener(faultyTraces);
-
-                        RecordingSink sink = new RecordingSink();
-                        TestRunSummary summary = await TestExecutor.RunAsync(new List<TestSuiteDescriptor>
-                        {
-                            Fixtures.Suite(id, Fixtures.Passing(id, "A"), Fixtures.Failing(id, "B", "b")),
-                        }, sink, ct).ConfigureAwait(false);
-
-                        TestAssert.Equal(1, summary.Passed, "Passed");
-                        TestAssert.Equal(1, summary.Failed, "Failed");
-                        TestAssert.Equal(2, sink.Results.Count, "sink still received every result");
-                        TestAssert.Equal("b", sink.Results[1].Message, "failure message unchanged");
-                    }
-                }),
-            });
+            yield return TelemetrySuite();
         }
 
-        private static TestCaseDescriptor Guarded(string suiteId, string caseId, string displayName, Func<CancellationToken, Task> body)
+        /// <summary>
+        /// Wrap a telemetry case so cases never overlap, even under hosts that run tests in parallel.
+        /// </summary>
+        /// <param name="suiteId">Suite identity.</param>
+        /// <param name="catalogId">Catalog ID.</param>
+        /// <param name="name">What the case verifies.</param>
+        /// <param name="body">Case body.</param>
+        /// <returns>The descriptor.</returns>
+        public static TestCaseDescriptor Guarded(string suiteId, string catalogId, string name, Func<CancellationToken, Task> body)
         {
-            return CaseBuilder.Async(suiteId, caseId, displayName, async ct =>
+            return Check.Async(suiteId, catalogId, name, async ct =>
             {
                 await _Gate.WaitAsync(ct).ConfigureAwait(false);
                 try
@@ -465,40 +60,456 @@ namespace Test.Shared
 
         private static TestSuiteDescriptor MixedSuite(string id)
         {
-            return new TestSuiteDescriptor(id, id + " display",
-                new List<TestCaseDescriptor>
-                {
-                    Fixtures.Passing(id, "Pass"),
-                    Fixtures.Failing(id, "Fail", "case broke"),
-                    Fixtures.Skipped(id, "Skip", "later"),
-                },
-                beforeSuiteAsync: _ => ValueTask.CompletedTask,
-                afterSuiteAsync: _ => ValueTask.CompletedTask);
+            return Fixtures.HookedSuite(id, _ => default, _ => default,
+                Fixtures.Passing(id, "Pass", null, new[] { "fast" }),
+                Fixtures.Failing(id, "Fail", "case broke"),
+                Fixtures.Skipped(id, "Skip", null, "later"),
+                new ScenarioBuilder<ScenarioContext>(id, "Scn", "Scenario", _ => Task.FromResult(new ScenarioContext()))
+                    .Given("secret-step", "secret step name", (_, _) => Task.CompletedTask)
+                    .Build());
         }
 
-        private static void AssertStageFailure(TelemetryCapture capture, string id, string stage, string suiteOutcome)
+        private static TestSuiteDescriptor TelemetrySuite()
+        {
+            const string S = "Telemetry";
+            return new TestSuiteDescriptor(S, "Telemetry", new[]
+            {
+                Guarded(S, "TEL-01", "Spans nest in one trace with fixed names", async ct =>
+                {
+                    string id = UniqueSuiteId();
+                    using (TelemetryCapture capture = new TelemetryCapture())
+                    {
+                        await TestExecutor.RunAsync(new[] { MixedSuite(id) }, new RecordingSink(), null, ct);
+
+                        Activity run = capture.Span(TouchstoneTelemetry.RunSpanName);
+                        Activity suite = capture.Span(TouchstoneTelemetry.SuiteSpanName);
+                        Activity before = capture.Span(TouchstoneTelemetry.StageSpanName, TouchstoneTelemetry.LabelStage, TouchstoneTelemetry.StageBeforeSuite);
+                        Activity after = capture.Span(TouchstoneTelemetry.StageSpanName, TouchstoneTelemetry.LabelStage, TouchstoneTelemetry.StageAfterSuite);
+                        Activity pass = capture.CaseSpan(id + ".Pass");
+                        Activity fail = capture.CaseSpan(id + ".Fail");
+                        Activity skip = capture.CaseSpan(id + ".Skip");
+                        Activity scenario = capture.CaseSpan(id + ".Scn");
+                        Activity step = capture.Span(TouchstoneTelemetry.ScenarioStepSpanName);
+
+                        TestAssert.Equal(capture.Root.SpanId, run.ParentSpanId, "run parent");
+                        TestAssert.Equal(run.SpanId, suite.ParentSpanId, "suite parent");
+                        foreach (Activity child in new[] { before, after, pass, fail, skip, scenario })
+                            TestAssert.Equal(suite.SpanId, child.ParentSpanId, child.DisplayName + " parent");
+                        TestAssert.Equal(scenario.SpanId, step.ParentSpanId, "step parent is the case");
+                        TestAssert.Equal(scenario.SpanId, capture.Span(TouchstoneTelemetry.ScenarioContextSpanName).ParentSpanId, "context parent");
+                        TestAssert.Equal(scenario.SpanId, capture.Span(TouchstoneTelemetry.ScenarioCleanupSpanName).ParentSpanId, "cleanup parent");
+
+                        TestAssert.Equal(ActivityStatusCode.Error, run.Status, "run status");
+                        TestAssert.Equal(TouchstoneTelemetry.OutcomeFailed, run.GetTagItem(TouchstoneTelemetry.AttributeOutcome), "run outcome");
+                        TestAssert.Equal(4, run.GetTagItem(TouchstoneTelemetry.AttributeCaseCount), "case count");
+                        TestAssert.Equal(1, run.GetTagItem(TouchstoneTelemetry.AttributeFailedCount), "failed count");
+                        TestAssert.Equal(2, run.GetTagItem(TouchstoneTelemetry.AttributePassedCount), "passed count");
+                        TestAssert.Equal(0, run.GetTagItem(TouchstoneTelemetry.AttributeNotRunCount), "not run count");
+                        TestAssert.Equal(id, suite.GetTagItem(TouchstoneTelemetry.AttributeSuiteId), "suite id");
+                        TestAssert.Equal(ActivityStatusCode.Ok, before.Status, "before status");
+                        TestAssert.Equal(ActivityStatusCode.Ok, pass.Status, "pass status");
+                        TestAssert.Equal("Pass", pass.GetTagItem(TouchstoneTelemetry.AttributeCaseId), "case id");
+                        TestAssert.Equal("fast", ((string[])pass.GetTagItem(TouchstoneTelemetry.AttributeCaseTags)!)[0], "tags");
+                        TestAssert.Equal(ActivityStatusCode.Error, fail.Status, "fail status");
+                        TestAssert.Equal("case broke", fail.StatusDescription, "fail description");
+                        TestAssert.Equal(typeof(InvalidOperationException).FullName, fail.GetTagItem(TouchstoneTelemetry.LabelErrorType), "error.type");
+                        TestAssert.True(fail.Events.Any(e => e.Name == "exception"), "exception event");
+                        TestAssert.Equal(TouchstoneTelemetry.OutcomeSkipped, skip.GetTagItem(TouchstoneTelemetry.AttributeOutcome), "skip outcome");
+                        TestAssert.Equal("later", skip.GetTagItem(TouchstoneTelemetry.AttributeSkipReason), "skip reason");
+                        TestAssert.Equal("given", step.GetTagItem(TouchstoneTelemetry.AttributeStepKind), "step kind");
+
+                        List<Activity> sinkSpans = capture.Spans().Where(a => a.DisplayName == TouchstoneTelemetry.SinkSpanName).ToList();
+                        TestAssert.Equal(11, sinkSpans.Count, "sink spans: run start, suite start, 3 case starts, 4 case completions, suite end, run end");
+                    }
+                }),
+                Guarded(S, "TEL-02", "Identities appear only as attributes, never in span names", async ct =>
+                {
+                    string id = UniqueSuiteId();
+                    using (TelemetryCapture capture = new TelemetryCapture())
+                    {
+                        await TestExecutor.RunAsync(new[] { MixedSuite(id) }, new RecordingSink(), null, ct);
+                        HashSet<string> allowed = new HashSet<string>
+                        {
+                            TouchstoneTelemetry.RunSpanName, TouchstoneTelemetry.SuiteSpanName, TouchstoneTelemetry.StageSpanName, TouchstoneTelemetry.CaseSpanName,
+                            TouchstoneTelemetry.SinkSpanName, TouchstoneTelemetry.ExportSpanName, TouchstoneTelemetry.ScenarioContextSpanName,
+                            TouchstoneTelemetry.ScenarioStepSpanName, TouchstoneTelemetry.ScenarioCleanupSpanName,
+                        };
+                        foreach (Activity span in capture.Spans())
+                        {
+                            TestAssert.True(allowed.Contains(span.DisplayName), "fixed span name: " + span.DisplayName);
+                            TestAssert.DoesNotContain(id, span.DisplayName, "suite id in span name");
+                        }
+                    }
+                }),
+                Guarded(S, "TEL-03", "Metric labels are bounded: no test identity, case identity, name, or tag", async ct =>
+                {
+                    string id = UniqueSuiteId();
+                    using (TelemetryCapture capture = new TelemetryCapture())
+                    {
+                        await TestExecutor.RunAsync(new[] { MixedSuite(id) }, new RecordingSink(), null, ct);
+                        HashSet<string> labels = new HashSet<string>
+                        {
+                            TouchstoneTelemetry.LabelSuite, TouchstoneTelemetry.LabelOutcome, TouchstoneTelemetry.LabelStage, TouchstoneTelemetry.LabelEvent,
+                            TouchstoneTelemetry.LabelErrorType, TouchstoneTelemetry.LabelFormat, TouchstoneTelemetry.LabelVersion,
+                            TouchstoneTelemetry.LabelOperation, TouchstoneTelemetry.LabelKind,
+                        };
+                        foreach (string instrument in new[] { TouchstoneTelemetry.Cases, TouchstoneTelemetry.CaseDuration, TouchstoneTelemetry.Suites, TouchstoneTelemetry.Runs,
+                            TouchstoneTelemetry.Stages, TouchstoneTelemetry.SinkEvents, TouchstoneTelemetry.Errors, TouchstoneTelemetry.ScenarioOperations })
+                        {
+                            foreach (CapturedMeasurement m in capture.Measurements(instrument))
+                            {
+                                foreach (KeyValuePair<string, object?> tag in m.Tags)
+                                {
+                                    TestAssert.True(labels.Contains(tag.Key), instrument + " label " + tag.Key);
+                                    string value = tag.Value?.ToString() ?? string.Empty;
+                                    TestAssert.False(value.Contains(".Pass", StringComparison.Ordinal) || value.Contains("secret", StringComparison.Ordinal) || value == "fast",
+                                        instrument + " value " + value);
+                                }
+                            }
+                        }
+
+                        TestAssert.True(capture.Measurements(TouchstoneTelemetry.Cases).Count >= 4, "case metrics recorded");
+                        TestAssert.Equal("s", capture.Measurements(TouchstoneTelemetry.CaseDuration)[0].Unit, "duration unit");
+                        TestAssert.Equal(0.0, capture.Measurements(TouchstoneTelemetry.CasesActive).Sum(a => a.Value), "active returns to zero");
+                    }
+                }),
+                Guarded(S, "TEL-04", "A passing run records passed and updates the last-success gauges", async ct =>
+                {
+                    string id = UniqueSuiteId();
+                    using (TelemetryCapture capture = new TelemetryCapture())
+                    {
+                        double before = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0 - 1;
+                        await TestExecutor.RunAsync(new[] { Fixtures.Suite(id, Fixtures.Passing(id, "A")) }, null, null, ct);
+                        TestAssert.Equal(TouchstoneTelemetry.OutcomePassed, capture.Measurements(TouchstoneTelemetry.Runs).Single().Tag(TouchstoneTelemetry.LabelOutcome), "run outcome");
+                        TestAssert.Equal(ActivityStatusCode.Ok, capture.Span(TouchstoneTelemetry.RunSpanName).Status, "run status");
+                        TestAssert.Equal(0, capture.Spans().Count(a => a.DisplayName == TouchstoneTelemetry.SinkSpanName), "no sink spans without a sink");
+                        TestAssert.True(capture.Observe(TouchstoneTelemetry.SuiteLastSuccessTime).Last(m => m.Tag(TouchstoneTelemetry.LabelSuite) == id).Value >= before, "suite gauge");
+                        TestAssert.True(capture.Observe(TouchstoneTelemetry.RunLastSuccessTime).Last().Value >= before, "run gauge");
+                    }
+                }),
+                Guarded(S, "TEL-05", "touchstone.build.info reports 1 with the version label", async ct =>
+                {
+                    using (TelemetryCapture capture = new TelemetryCapture())
+                    {
+                        await TestExecutor.RunSuiteAsync(Fixtures.Suite(UniqueSuiteId()), null, null, ct);
+                        CapturedMeasurement info = capture.Observe(TouchstoneTelemetry.BuildInfo).Last();
+                        TestAssert.Equal(1.0, info.Value, "value");
+                        string? version = info.Tag(TouchstoneTelemetry.LabelVersion);
+                        TestAssert.True(!string.IsNullOrEmpty(version) && version != "unknown", "version: " + version);
+                    }
+                }),
+                Guarded(S, "TEL-06", "A before_suite failure records a failed stage, an error, and outcome error", async ct =>
+                {
+                    string id = UniqueSuiteId();
+                    using (TelemetryCapture capture = new TelemetryCapture())
+                    {
+                        await TestExecutor.RunAsync(new[] { Fixtures.HookedSuite(id, _ => throw new InvalidOperationException("setup failed"), null, Fixtures.Passing(id, "A")) }, null, null, ct);
+                        AssertStageFailure(capture, TouchstoneTelemetry.StageBeforeSuite);
+                    }
+                }),
+                Guarded(S, "TEL-07", "An after_suite failure records a failed stage and outcome error", async ct =>
+                {
+                    string id = UniqueSuiteId();
+                    using (TelemetryCapture capture = new TelemetryCapture())
+                    {
+                        await TestExecutor.RunAsync(new[] { Fixtures.HookedSuite(id, null, _ => throw new InvalidOperationException("teardown failed"), Fixtures.Passing(id, "A")) }, null, null, ct);
+                        AssertStageFailure(capture, TouchstoneTelemetry.StageAfterSuite);
+                        TestAssert.Equal(1, capture.Measurements(TouchstoneTelemetry.Cases).Count, "case ran");
+                    }
+                }),
+                Guarded(S, "TEL-08", "A canceled run records canceled at run, suite, and case level", async ct =>
+                {
+                    string id = UniqueSuiteId();
+                    using (TelemetryCapture capture = new TelemetryCapture())
+                    using (CancellationTokenSource source = new CancellationTokenSource())
+                    {
+                        await TestExecutor.RunAsync(new[] { Fixtures.Suite(id, Fixtures.CancelsRun(id, "A", source)) }, null, null, source.Token);
+                        TestAssert.Equal("canceled", capture.Measurements(TouchstoneTelemetry.Runs).Single().Tag(TouchstoneTelemetry.LabelOutcome), "run");
+                        TestAssert.Equal("canceled", capture.Measurements(TouchstoneTelemetry.Suites).Single().Tag(TouchstoneTelemetry.LabelOutcome), "suite");
+                        TestAssert.Equal("canceled", capture.Measurements(TouchstoneTelemetry.Cases).Single().Tag(TouchstoneTelemetry.LabelOutcome), "case");
+                        TestAssert.Equal("canceled", capture.CaseSpan(id + ".A").GetTagItem(TouchstoneTelemetry.AttributeOutcome), "case span");
+                    }
+                }),
+                Guarded(S, "TEL-09", "A throwing sink records a failed sink event and a sink error", async ct =>
+                {
+                    string id = UniqueSuiteId();
+                    using (TelemetryCapture capture = new TelemetryCapture())
+                    {
+                        await TestAssert.ThrowsAsync<InvalidOperationException>(
+                            () => TestExecutor.RunSuiteAsync(Fixtures.Suite(id, Fixtures.Passing(id, "A")), new RecordingSink(TouchstoneTelemetry.EventCaseCompleted), null, ct), "sink");
+                        CapturedMeasurement failed = capture.Measurements(TouchstoneTelemetry.SinkEvents).Single(e => e.Tag(TouchstoneTelemetry.LabelOutcome) == TouchstoneTelemetry.OutcomeFailed);
+                        TestAssert.Equal(TouchstoneTelemetry.EventCaseCompleted, failed.Tag(TouchstoneTelemetry.LabelEvent), "event");
+                        CapturedMeasurement error = capture.Measurements(TouchstoneTelemetry.Errors).Single();
+                        TestAssert.Equal(TouchstoneTelemetry.StageSink, error.Tag(TouchstoneTelemetry.LabelStage), "stage");
+                        TestAssert.Equal(TouchstoneTelemetry.OutcomeError, capture.Measurements(TouchstoneTelemetry.Suites).Single().Tag(TouchstoneTelemetry.LabelOutcome), "suite outcome");
+                        TestAssert.Equal(ActivityStatusCode.Error, capture.Span(TouchstoneTelemetry.SinkSpanName, TouchstoneTelemetry.LabelEvent, TouchstoneTelemetry.EventCaseCompleted).Status, "sink span");
+                    }
+                }),
+                Guarded(S, "TEL-10", "ExecuteCaseAsync emits a case span and metrics", async ct =>
+                {
+                    string id = UniqueSuiteId();
+                    using (TelemetryCapture capture = new TelemetryCapture())
+                    {
+                        await TestExecutor.ExecuteCaseAsync(Fixtures.Passing(id, "Good"), null, ct);
+                        await TestAssert.ThrowsAsync<InvalidOperationException>(() => TestExecutor.ExecuteCaseAsync(Fixtures.Failing(id, "Bad"), null, ct), "failing");
+                        await TestExecutor.ExecuteCaseAsync(Fixtures.Skipped(id, "Later"), null, ct);
+                        TestAssert.Equal(capture.Root.SpanId, capture.CaseSpan(id + ".Good").ParentSpanId, "parent is caller");
+                        TestAssert.Equal(ActivityStatusCode.Error, capture.CaseSpan(id + ".Bad").Status, "failing status");
+                        TestAssert.Equal(3, capture.Measurements(TouchstoneTelemetry.Cases).Count, "case measurements");
+                        TestAssert.Equal(0, capture.Measurements(TouchstoneTelemetry.Runs).Count, "no run measurement");
+                    }
+                }),
+                Guarded(S, "TEL-11", "The case span is current inside the body, so outbound calls inherit its traceparent", async ct =>
+                {
+                    string id = UniqueSuiteId();
+                    Activity? seen = null;
+                    Dictionary<string, string> headers = new Dictionary<string, string>();
+                    TestCaseDescriptor probe = new TestCaseDescriptor(id, "Probe", "Probe", async _ =>
+                    {
+                        await Task.Yield();
+                        seen = Activity.Current;
+                        DistributedContextPropagator.Current.Inject(seen, headers, (carrier, key, value) =>
+                        {
+                            if (carrier is Dictionary<string, string> map && value != null) map[key] = value;
+                        });
+                    });
+                    using (TelemetryCapture capture = new TelemetryCapture())
+                    {
+                        await TestExecutor.RunAsync(new[] { Fixtures.Suite(id, probe) }, null, null, ct);
+                        Activity span = capture.CaseSpan(id + ".Probe");
+                        TestAssert.Same(span, seen, "current activity");
+                        TestAssert.Equal(ActivityIdFormat.W3C, span.IdFormat, "W3C");
+                        TestAssert.Contains(span.SpanId.ToHexString(), headers["traceparent"], "traceparent span id");
+                    }
+                }),
+                Guarded(S, "TEL-13", "Report exports emit telemetry, including a failed export with error.type", async ct =>
+                {
+                    string id = UniqueSuiteId();
+                    string path = Path.Combine(Path.GetTempPath(), "touchstone-telemetry-" + Guid.NewGuid().ToString("N") + ".json");
+                    string badPath = Path.Combine(Path.GetTempPath(), "touchstone-missing-" + Guid.NewGuid().ToString("N"), "results.json");
+                    try
+                    {
+                        using (TelemetryCapture capture = new TelemetryCapture())
+                        {
+                            await CliSuites.RunToText(new[] { Fixtures.Suite(id, Fixtures.Passing(id, "A")) }, o => { o.JsonResultsPath = path; o.HtmlReportPath = path + ".html"; }, ct);
+                            List<CapturedMeasurement> exports = capture.Measurements(TouchstoneTelemetry.Exports);
+                            TestAssert.Equal("html,json", string.Join(",", exports.Select(e => e.Tag(TouchstoneTelemetry.LabelFormat)).OrderBy(f => f, StringComparer.Ordinal)), "formats");
+                            TestAssert.True(exports.All(e => e.Tag(TouchstoneTelemetry.LabelOutcome) == TouchstoneTelemetry.OutcomeOk), "outcomes");
+                            Activity span = capture.Span(TouchstoneTelemetry.ExportSpanName, TouchstoneTelemetry.LabelFormat, "json");
+                            TestAssert.Equal(1, span.GetTagItem(TouchstoneTelemetry.AttributeResultCount), "result count");
+                        }
+
+                        using (TelemetryCapture capture = new TelemetryCapture())
+                        {
+                            await TestAssert.ThrowsAsync<DirectoryNotFoundException>(
+                                () => CliSuites.RunToText(new[] { Fixtures.Suite(id, Fixtures.Passing(id, "A")) }, o => o.JsonResultsPath = badPath, ct), "bad path");
+                            CapturedMeasurement export = capture.Measurements(TouchstoneTelemetry.Exports).Single();
+                            TestAssert.Equal(TouchstoneTelemetry.OutcomeFailed, export.Tag(TouchstoneTelemetry.LabelOutcome), "outcome");
+                            TestAssert.Equal(typeof(DirectoryNotFoundException).FullName, export.Tag(TouchstoneTelemetry.LabelErrorType), "error.type");
+                        }
+                    }
+                    finally
+                    {
+                        File.Delete(path);
+                        File.Delete(path + ".html");
+                    }
+                }),
+                Guarded(S, "TEL-14", "SuiteLabelEnabled=false drops the suite label from metrics but keeps it on spans", async ct =>
+                {
+                    string id = UniqueSuiteId();
+                    bool previous = TouchstoneTelemetry.SuiteLabelEnabled;
+                    TouchstoneTelemetry.SuiteLabelEnabled = false;
+                    try
+                    {
+                        using (TelemetryCapture capture = new TelemetryCapture())
+                        {
+                            await TestExecutor.RunSuiteAsync(Fixtures.Suite(id, Fixtures.Passing(id, "A")), null, null, ct);
+                            TestAssert.False(capture.Measurements(TouchstoneTelemetry.Cases).Single().Tags.ContainsKey(TouchstoneTelemetry.LabelSuite), "case metric");
+                            TestAssert.False(capture.Measurements(TouchstoneTelemetry.Suites).Single().Tags.ContainsKey(TouchstoneTelemetry.LabelSuite), "suite metric");
+                            TestAssert.Equal(id, capture.Span(TouchstoneTelemetry.SuiteSpanName).GetTagItem(TouchstoneTelemetry.AttributeSuiteId), "span");
+                        }
+                    }
+                    finally
+                    {
+                        TouchstoneTelemetry.SuiteLabelEnabled = previous;
+                    }
+                }),
+                Guarded(S, "TEL-15", "Execution with no listener behaves identically", async ct =>
+                {
+                    Activity.Current = null;
+                    string id = UniqueSuiteId();
+                    TestRunSummary summary = await TestExecutor.RunAsync(new[] { MixedSuite(id) }, new RecordingSink(), null, ct);
+                    TestAssert.Equal(4, summary.Total, "total");
+                    TestAssert.Equal(2, summary.Passed, "passed");
+                    TestAssert.Equal(1, summary.Failed, "failed");
+                    TestAssert.Equal(1, summary.Skipped, "skipped");
+                }),
+                Guarded(S, "TEL-16", "Throwing metric and trace listeners never change outcomes", async ct =>
+                {
+                    string id = UniqueSuiteId();
+                    int injected = 0;
+                    using (TelemetryCapture capture = new TelemetryCapture())
+                    using (MeterListener faulty = new MeterListener())
+                    using (ActivityListener faultyTraces = new ActivityListener())
+                    {
+                        ActivityTraceId trace = capture.TraceId;
+                        faulty.InstrumentPublished = (instrument, listener) =>
+                        {
+                            if (instrument.Meter.Name == TouchstoneTelemetry.MeterName) listener.EnableMeasurementEvents(instrument);
+                        };
+                        faulty.SetMeasurementEventCallback<double>((i, v, t, s) => { if (Activity.Current?.TraceId == trace) { injected++; throw new InvalidOperationException("faulty metrics"); } });
+                        faulty.SetMeasurementEventCallback<long>((i, v, t, s) => { if (Activity.Current?.TraceId == trace) { injected++; throw new InvalidOperationException("faulty metrics"); } });
+                        faulty.Start();
+                        faultyTraces.ShouldListenTo = s => s.Name == TouchstoneTelemetry.ActivitySourceName;
+                        faultyTraces.Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded;
+                        faultyTraces.ActivityStopped = a => { if (a.TraceId == trace) throw new InvalidOperationException("faulty traces"); };
+                        ActivitySource.AddActivityListener(faultyTraces);
+
+                        RecordingSink sink = new RecordingSink();
+                        TestRunSummary summary = await TestExecutor.RunAsync(new[] { MixedSuite(id) }, sink, null, ct);
+                        TestAssert.Equal(2, summary.Passed, "passed");
+                        TestAssert.Equal(1, summary.Failed, "failed");
+                        TestAssert.Equal(4, sink.Results.Count, "every result delivered");
+                        TestAssert.Equal("case broke", sink.Results[1].Message, "message unchanged");
+                        TestAssert.True(injected > 0, "fault exercised");
+                    }
+                }),
+                Guarded(S, "TEL-17", "Scenario operation metrics use lowercase outcomes and the public labels", async ct =>
+                {
+                    string id = UniqueSuiteId();
+                    using (TelemetryCapture capture = new TelemetryCapture())
+                    {
+                        await TestExecutor.ExecuteCaseResultAsync(Fixtures.Scenario(id, "Scn", (c, t) => throw new InvalidOperationException("x")), null, null, ct);
+                        List<CapturedMeasurement> ops = capture.Measurements(TouchstoneTelemetry.ScenarioOperations);
+                        TestAssert.Equal("context:passed:none,step:failed:when,cleanup:passed:none",
+                            string.Join(",", ops.Select(m => m.Tag(TouchstoneTelemetry.LabelOperation) + ":" + m.Tag(TouchstoneTelemetry.LabelOutcome) + ":" + m.Tag(TouchstoneTelemetry.LabelKind))), "operations");
+                        TestAssert.Equal(3, capture.Measurements(TouchstoneTelemetry.ScenarioOperationDuration).Count, "durations");
+                    }
+                }),
+                Guarded(S, "TEL-18", "Every public telemetry constant is emitted or documented as a value", async ct =>
+                {
+                    string id = UniqueSuiteId();
+                    string path = Path.Combine(Path.GetTempPath(), "touchstone-tel18-" + Guid.NewGuid().ToString("N"));
+                    HashSet<string> seen = new HashSet<string>(StringComparer.Ordinal);
+                    try
+                    {
+                        using (TelemetryCapture capture = new TelemetryCapture())
+                        using (CancellationTokenSource source = new CancellationTokenSource())
+                        {
+                            TestRunOptions options = new TestRunOptions();
+                            options.Filter.ExcludeTags.Add("off");
+                            await CliSuites.RunToText(new[]
+                            {
+                                MixedSuite(id),
+                                Fixtures.HookedSuite(id + "b", _ => throw new InvalidOperationException("x"), null, Fixtures.Passing(id + "b", "A")),
+                                Fixtures.Suite(id + "c", Fixtures.Passing(id + "c", "Off", null, new[] { "off" }), Fixtures.CancelsRun(id + "c", "Stop", source), Fixtures.Passing(id + "c", "Never")),
+                            }, o => { o.Run = options; o.JsonResultsPath = path; o.HtmlReportPath = path + ".html"; o.AdditionalSinks.Add(new RecordingSink()); }, source.Token);
+
+                            foreach (Activity span in capture.Spans())
+                            {
+                                seen.Add(span.DisplayName);
+                                foreach (KeyValuePair<string, object?> tag in span.TagObjects)
+                                {
+                                    seen.Add(tag.Key);
+                                    if (tag.Value is string text) seen.Add(text);
+                                }
+                            }
+
+                            foreach (CapturedMeasurement m in capture.MeasurementsAll())
+                            {
+                                seen.Add(m.Instrument);
+                                foreach (KeyValuePair<string, object?> tag in m.Tags)
+                                {
+                                    seen.Add(tag.Key);
+                                    if (tag.Value is string text) seen.Add(text);
+                                }
+                            }
+
+                            foreach (string observable in new[] { TouchstoneTelemetry.BuildInfo, TouchstoneTelemetry.SuiteLastSuccessTime, TouchstoneTelemetry.RunLastSuccessTime })
+                            {
+                                foreach (CapturedMeasurement m in capture.Observe(observable))
+                                {
+                                    seen.Add(observable);
+                                    foreach (KeyValuePair<string, object?> tag in m.Tags) seen.Add(tag.Key);
+                                }
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        File.Delete(path);
+                        File.Delete(path + ".html");
+                    }
+
+                    seen.Add(TouchstoneTelemetry.MeterName);
+                    seen.Add(TouchstoneTelemetry.ActivitySourceName);
+                    HashSet<string> notEmittedHere = new HashSet<string>(StringComparer.Ordinal)
+                    {
+                        TouchstoneTelemetry.StageRun,
+                        TouchstoneTelemetry.StageSink,
+                    };
+                    foreach (FieldInfo field in typeof(TouchstoneTelemetry).GetFields(BindingFlags.Public | BindingFlags.Static).Where(f => f.IsLiteral))
+                    {
+                        string value = (string)field.GetRawConstantValue()!;
+                        if (notEmittedHere.Contains(value)) continue;
+                        TestAssert.True(seen.Contains(value), "TouchstoneTelemetry." + field.Name + " (" + value + ") was emitted");
+                    }
+                }),
+                Guarded(S, "TEL-19", "Core uses one meter and one activity source", async ct =>
+                {
+                    List<string> meters = new List<string>();
+                    using (MeterListener listener = new MeterListener())
+                    {
+                        listener.InstrumentPublished = (instrument, l) =>
+                        {
+                            if (instrument.Meter.Name == TouchstoneTelemetry.MeterName && instrument.Name.StartsWith("touchstone.", StringComparison.Ordinal) && !instrument.Name.StartsWith("touchstone.export", StringComparison.Ordinal))
+                                meters.Add(instrument.Meter.GetHashCode().ToString(System.Globalization.CultureInfo.InvariantCulture));
+                        };
+                        listener.Start();
+                        await TestExecutor.ExecuteCaseResultAsync(Fixtures.Scenario(UniqueSuiteId(), "Scn", (c, t) => Task.CompletedTask), null, null, ct);
+                    }
+
+                    TestAssert.True(meters.Count > 0, "instruments observed");
+                    TestAssert.Equal(1, meters.Distinct().Count(), "distinct Core meters");
+                }),
+                Guarded(S, "TEL-20", "Filtered cases increment touchstone.cases.filtered; not-run cases record not_run", async ct =>
+                {
+                    string id = UniqueSuiteId();
+                    using (TelemetryCapture capture = new TelemetryCapture())
+                    {
+                        TestRunOptions options = new TestRunOptions { StopOnFirstFailure = true };
+                        options.Filter.ExcludeTags.Add("off");
+                        await TestExecutor.RunSuiteAsync(Fixtures.Suite(id, Fixtures.Passing(id, "Off", null, new[] { "off" }), Fixtures.Failing(id, "Bad"), Fixtures.Passing(id, "Later")), null, options, ct);
+                        TestAssert.Equal(1.0, capture.Measurements(TouchstoneTelemetry.CasesFiltered).Sum(m => m.Value), "filtered");
+                        TestAssert.Equal(1, capture.Measurements(TouchstoneTelemetry.Cases).Count(m => m.Tag(TouchstoneTelemetry.LabelOutcome) == TouchstoneTelemetry.OutcomeNotRun), "not run");
+                    }
+                }),
+                Guarded(S, "TEL-21", "Lifecycle errors increment touchstone.errors with the stage label", async ct =>
+                {
+                    string id = UniqueSuiteId();
+                    using (TelemetryCapture capture = new TelemetryCapture())
+                    {
+                        await TestExecutor.RunSuiteAsync(Fixtures.HookedSuite(id, _ => throw new InvalidOperationException("a"), _ => throw new FormatException("b"), Fixtures.Passing(id, "A")), null, null, ct);
+                        List<CapturedMeasurement> errors = capture.Measurements(TouchstoneTelemetry.Errors);
+                        TestAssert.Equal(1, errors.Count(e => e.Tag(TouchstoneTelemetry.LabelStage) == TouchstoneTelemetry.StageBeforeSuite), "before");
+                        TestAssert.Equal(typeof(FormatException).FullName, errors.Single(e => e.Tag(TouchstoneTelemetry.LabelStage) == TouchstoneTelemetry.StageAfterSuite).Tag(TouchstoneTelemetry.LabelErrorType), "after");
+                    }
+                }),
+            });
+        }
+
+        private static void AssertStageFailure(TelemetryCapture capture, string stage)
         {
             CapturedMeasurement stageMeasurement = capture.Measurements(TouchstoneTelemetry.Stages).Single(s => s.Tag(TouchstoneTelemetry.LabelStage) == stage);
             TestAssert.Equal(TouchstoneTelemetry.OutcomeFailed, stageMeasurement.Tag(TouchstoneTelemetry.LabelOutcome), stage + " outcome");
-            TestAssert.Equal(id, stageMeasurement.Tag(TouchstoneTelemetry.LabelSuite), stage + " suite label");
-
             CapturedMeasurement error = capture.Measurements(TouchstoneTelemetry.Errors).Single(e => e.Tag(TouchstoneTelemetry.LabelStage) == stage);
             TestAssert.Equal(typeof(InvalidOperationException).FullName, error.Tag(TouchstoneTelemetry.LabelErrorType), stage + " error.type");
-
-            TestAssert.Equal(suiteOutcome, capture.Measurements(TouchstoneTelemetry.Suites).Single().Tag(TouchstoneTelemetry.LabelOutcome), "suite outcome");
-            TestAssert.Equal(suiteOutcome, capture.Measurements(TouchstoneTelemetry.Runs).Single().Tag(TouchstoneTelemetry.LabelOutcome), "run outcome");
-
-            Activity stageSpan = capture.Span(TouchstoneTelemetry.StageSpanPrefix + stage);
-            TestAssert.Equal(ActivityStatusCode.Error, stageSpan.Status, stage + " span status");
-            TestAssert.True(stageSpan.Events.Any(e => e.Name == "exception"), stage + " exception event");
-            TestAssert.Equal(ActivityStatusCode.Error, capture.Span(TouchstoneTelemetry.SuiteSpanPrefix + id).Status, "suite span status");
+            TestAssert.Equal(TouchstoneTelemetry.OutcomeError, capture.Measurements(TouchstoneTelemetry.Suites).Single().Tag(TouchstoneTelemetry.LabelOutcome), "suite outcome");
+            TestAssert.Equal(TouchstoneTelemetry.OutcomeError, capture.Measurements(TouchstoneTelemetry.Runs).Single().Tag(TouchstoneTelemetry.LabelOutcome), "run outcome");
+            Activity span = capture.Span(TouchstoneTelemetry.StageSpanName, TouchstoneTelemetry.LabelStage, stage);
+            TestAssert.Equal(ActivityStatusCode.Error, span.Status, stage + " span status");
+            TestAssert.True(span.Events.Any(e => e.Name == "exception"), stage + " exception event");
             TestAssert.Equal(ActivityStatusCode.Error, capture.Span(TouchstoneTelemetry.RunSpanName).Status, "run span status");
-        }
-
-        private static void ThrowInTrace(ActivityTraceId trace)
-        {
-            if (Activity.Current != null && Activity.Current.TraceId == trace)
-                throw new InvalidOperationException("faulty metrics exporter");
         }
     }
 }

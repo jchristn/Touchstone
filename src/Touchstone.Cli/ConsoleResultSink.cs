@@ -2,6 +2,7 @@ namespace Touchstone.Cli
 {
     using System;
     using System.Collections.Generic;
+    using System.Globalization;
     using System.IO;
     using System.Threading;
     using System.Threading.Tasks;
@@ -9,219 +10,214 @@ namespace Touchstone.Cli
     using Touchstone.Core;
 
     /// <summary>
-    /// Writes test results to the console in a tabular format with colored output.
+    /// Writes results as a table: one row per case, then an overall summary with failures and suite hook errors.
+    /// Color uses ANSI sequences written to the writer; the process console color is never changed.
+    /// Thread safety: not thread-safe. Use one instance per run.
     /// </summary>
-    public sealed class ConsoleResultSink : ITestResultSink, IScenarioStepSink
+    public sealed class ConsoleResultSink : ITestResultSink
     {
-        /// <summary>Show live step execution. Default false. Use one sink per run.</summary>
-        public bool ExpandSteps { get; set; }
-        private Func<string, string> _Redact = text => text;
-        /// <summary>Transform consumer text before writing it or exporting results. Default identity.
-        /// Set before execution; must not be null. This sink is not safe for concurrent runs.</summary>
-        public Func<string, string> Redact
-        {
-            get { return _Redact; }
-            set { _Redact = value ?? throw new ArgumentNullException(nameof(value)); }
-        }
-        /// <inheritdoc />
-        public ValueTask OnStepStartedAsync(string testId, ScenarioStepResult step, CancellationToken cancellationToken)
-        {
-            if (ExpandSteps) _Writer.WriteLine("  " + Redact(testId) + " " + step.Kind.ToString().ToUpperInvariant() + " " + Redact(step.DisplayName) + "...");
-            return ValueTask.CompletedTask;
-        }
-        /// <inheritdoc />
-        public ValueTask OnStepCompletedAsync(string testId, ScenarioStepResult step, CancellationToken cancellationToken)
-        {
-            if (ExpandSteps) _Writer.WriteLine("    " + step.Outcome + " " + FormatRuntime(step.Duration) + (step.Message == null ? "" : " " + Redact(step.Message)));
-            return ValueTask.CompletedTask;
-        }
+        private const int ResultColumnWidth = 8;
+        private const int RuntimeColumnWidth = 9;
+        private const int SeparatorWidth = 4;
+        private const int MinimumDescriptionWidth = 40;
+        private const int DefaultDescriptionWidth = 100;
+        private const string AnsiReset = "\u001b[0m";
+        private const string AnsiGreen = "\u001b[32m";
+        private const string AnsiRed = "\u001b[31m";
+        private const string AnsiYellow = "\u001b[33m";
 
         private readonly TextWriter _Writer;
         private readonly bool _UseColor;
+        private readonly bool _ExpandSteps;
+        private readonly Func<string, string> _Redact;
         private readonly int _DescriptionWidth;
-        private readonly List<TestResult> _AllResults = new List<TestResult>();
+        private readonly List<TestResult> _Results = new List<TestResult>();
+        private TestRunSummary? _Summary = null;
 
         /// <summary>
-        /// Initialize a new console result sink.
+        /// Initialize a console sink.
         /// </summary>
-        /// <param name="writer">Output writer. Defaults to Console.Out.</param>
-        /// <param name="useColor">Whether to use ANSI color. Defaults to true when output is not redirected.</param>
-        public ConsoleResultSink(TextWriter? writer = null, bool? useColor = null)
+        /// <param name="options">Writer, color, step expansion, and redaction settings. Null uses the defaults. The
+        /// settings are read once, here.</param>
+        public ConsoleResultSink(ConsoleRunnerOptions? options = null)
         {
-            _Writer = writer ?? Console.Out;
-            _UseColor = useColor ?? !Console.IsOutputRedirected;
-            _DescriptionWidth = GetMaximumDescriptionWidth();
+            ConsoleRunnerOptions settings = options ?? new ConsoleRunnerOptions();
+            bool isConsole = settings.Writer == null || ReferenceEquals(settings.Writer, Console.Out);
+            _Writer = settings.Writer ?? Console.Out;
+            _UseColor = settings.UseColor ?? (isConsole && !Console.IsOutputRedirected);
+            _ExpandSteps = settings.ExpandSteps;
+            _Redact = settings.Redact;
+            _DescriptionWidth = DescriptionWidth(isConsole);
         }
 
         /// <summary>
-        /// All results collected during this run.
+        /// Every result written, in completion order. Never null.
         /// </summary>
         public IReadOnlyList<TestResult> AllResults
         {
-            get { return _AllResults; }
+            get { return _Results.AsReadOnly(); }
         }
 
         /// <summary>
-        /// Write the column header and separator line.
+        /// The run summary. Null until a multi-suite run completes.
         /// </summary>
-        public void WriteHeader()
+        public TestRunSummary? Summary
         {
-            _Writer.WriteLine(
-                "Test".PadRight(_DescriptionWidth)
-                + "  "
-                + "Result".PadRight(6)
-                + "  "
-                + "Runtime".PadLeft(8));
-            _Writer.WriteLine(
-                new string('-', _DescriptionWidth)
-                + "  "
-                + new string('-', 6)
-                + "  "
-                + new string('-', 8));
+            get { return _Summary; }
+        }
+
+        /// <summary>
+        /// Width of the test name column, in characters. At least 40. When output is redirected or the console width is
+        /// unavailable, 100.
+        /// </summary>
+        public int DescriptionColumnWidth
+        {
+            get { return _DescriptionWidth; }
         }
 
         /// <inheritdoc />
-        public ValueTask OnSuiteStartedAsync(TestSuiteDescriptor suite, CancellationToken cancellationToken)
+        public ValueTask OnRunStartedAsync(IReadOnlyList<TestSuiteDescriptor> suites, CancellationToken cancellationToken)
         {
-            return ValueTask.CompletedTask;
+            _Writer.WriteLine("Test".PadRight(_DescriptionWidth) + "  " + "Result".PadRight(ResultColumnWidth) + "  " + "Runtime".PadLeft(RuntimeColumnWidth));
+            _Writer.WriteLine(new string('-', _DescriptionWidth) + "  " + new string('-', ResultColumnWidth) + "  " + new string('-', RuntimeColumnWidth));
+            return default;
         }
 
         /// <inheritdoc />
-        public ValueTask OnTestCompletedAsync(TestResult result, CancellationToken cancellationToken)
+        public ValueTask OnStepStartedAsync(string testId, ScenarioStepResult step, CancellationToken cancellationToken)
+        {
+            if (_ExpandSteps)
+                _Writer.WriteLine("  " + _Redact(testId) + " " + step.Kind.ToString().ToUpperInvariant() + " " + _Redact(step.DisplayName) + "...");
+            return default;
+        }
+
+        /// <inheritdoc />
+        public ValueTask OnStepCompletedAsync(string testId, ScenarioStepResult step, CancellationToken cancellationToken)
+        {
+            if (_ExpandSteps)
+                _Writer.WriteLine("    " + step.Outcome + " " + FormatRuntime(step.Duration) + (step.Message == null ? string.Empty : " " + _Redact(step.Message)));
+            return default;
+        }
+
+        /// <inheritdoc />
+        /// <exception cref="ArgumentNullException">The result is null.</exception>
+        public ValueTask OnCaseCompletedAsync(TestResult result, CancellationToken cancellationToken)
         {
             if (result == null) throw new ArgumentNullException(nameof(result));
 
-            _AllResults.Add(result);
-            WriteResultLine(result);
-            if (ExpandSteps)
+            _Results.Add(result);
+            _Writer.Write(FormatDescription(_Redact(result.DisplayName), _DescriptionWidth));
+            _Writer.Write("  ");
+            WriteStatus(OutcomeNames.Label(result.Outcome), ColorOf(result.Outcome));
+            _Writer.Write("  ");
+            _Writer.WriteLine(FormatRuntime(result.Duration).PadLeft(RuntimeColumnWidth));
+
+            if (_ExpandSteps)
             {
                 foreach (ScenarioStepResult step in result.Steps)
+                {
                     if (step.Outcome == ScenarioStepOutcome.NotRun || step.Outcome == ScenarioStepOutcome.Skipped)
-                        _Writer.WriteLine("  " + Redact(step.DisplayName) + " " + step.Outcome);
-                foreach (Exception error in result.CleanupExceptions) _Writer.WriteLine("  Cleanup: " + Redact(error.Message));
+                        _Writer.WriteLine("  " + _Redact(step.DisplayName) + " " + step.Outcome);
+                }
+
+                foreach (Exception error in result.CleanupExceptions)
+                    _Writer.WriteLine("  Cleanup: " + _Redact(error.Message));
             }
-            return ValueTask.CompletedTask;
+
+            return default;
         }
 
         /// <inheritdoc />
-        public ValueTask OnSuiteCompletedAsync(TestSuiteDescriptor suite, TestRunSummary summary, CancellationToken cancellationToken)
+        /// <exception cref="ArgumentNullException">The summary is null.</exception>
+        public ValueTask OnRunCompletedAsync(TestRunSummary summary, CancellationToken cancellationToken)
         {
-            return ValueTask.CompletedTask;
-        }
+            _Summary = summary ?? throw new ArgumentNullException(nameof(summary));
 
-        /// <summary>
-        /// Write the overall summary row and failed test listing.
-        /// </summary>
-        /// <param name="totalRuntime">Total elapsed time.</param>
-        /// <param name="totalCount">Total test count.</param>
-        /// <param name="passedCount">Passed test count.</param>
-        /// <param name="failedCount">Failed test count.</param>
-        /// <param name="skippedCount">Skipped test count.</param>
-        public void WriteOverall(TimeSpan totalRuntime, int totalCount, int passedCount, int failedCount, int skippedCount)
-        {
             _Writer.WriteLine();
-
-            bool passed = failedCount == 0;
-            string runtime = FormatRuntime(totalRuntime);
-
             _Writer.Write("OVERALL".PadRight(_DescriptionWidth));
             _Writer.Write("  ");
-            WriteStatus(passed);
+            if (summary.WasCanceled) WriteStatus("CANCELED", AnsiYellow);
+            else if (summary.IsSuccess) WriteStatus("PASS", AnsiGreen);
+            else WriteStatus("FAIL", AnsiRed);
             _Writer.Write("  ");
-            _Writer.WriteLine(runtime.PadLeft(8));
+            _Writer.WriteLine(FormatRuntime(summary.Duration).PadLeft(RuntimeColumnWidth));
 
-            _Writer.WriteLine(
-                "Total: " + totalCount.ToString()
-                + "  Passed: " + passedCount.ToString()
-                + "  Failed: " + failedCount.ToString()
-                + "  Skipped: " + skippedCount.ToString());
+            string totals = "Total: " + Number(summary.Total)
+                + "  Passed: " + Number(summary.Passed)
+                + "  Failed: " + Number(summary.Failed)
+                + "  Skipped: " + Number(summary.Skipped);
+            if (summary.Canceled > 0) totals += "  Canceled: " + Number(summary.Canceled);
+            if (summary.NotRun > 0) totals += "  Not run: " + Number(summary.NotRun);
+            if (summary.Filtered > 0) totals += "  Filtered: " + Number(summary.Filtered);
+            _Writer.WriteLine(totals);
 
-            if (failedCount > 0)
+            bool headerWritten = false;
+            foreach (TestResult result in _Results)
             {
-                _Writer.WriteLine("Failed Tests:");
-
-                foreach (TestResult result in _AllResults)
+                if (result.Outcome != TestOutcome.Failed && result.Outcome != TestOutcome.Canceled) continue;
+                if (!headerWritten)
                 {
-                    if (!result.Success && !result.Skipped)
-                    {
-                        _Writer.WriteLine("  " + Redact(result.DisplayName));
-
-                        if (result.Message != null)
-                            _Writer.WriteLine("    " + Redact(result.Message));
-                    }
+                    _Writer.WriteLine("Failed Tests:");
+                    headerWritten = true;
                 }
+
+                _Writer.WriteLine("  " + _Redact(result.DisplayName));
+                if (result.Message != null) _Writer.WriteLine("    " + _Redact(result.Message));
             }
-        }
 
-        private void WriteResultLine(TestResult result)
-        {
-            string description = FormatDescription(Redact(result.DisplayName), _DescriptionWidth);
-            _Writer.Write(description);
-            _Writer.Write("  ");
-
-            if (result.Skipped)
-                WriteStatus("SKIP", ConsoleColor.Yellow);
-            else
-                WriteStatus(result.Success);
-
-            _Writer.Write("  ");
-            _Writer.WriteLine(FormatRuntime(result.Duration).PadLeft(8));
-        }
-
-        private void WriteStatus(bool passed)
-        {
-            WriteStatus(
-                passed ? "PASS" : "FAIL",
-                passed ? ConsoleColor.Green : ConsoleColor.Red);
-        }
-
-        private void WriteStatus(string label, ConsoleColor color)
-        {
-            if (!_UseColor)
+            if (summary.LifecycleErrors.Count > 0)
             {
-                _Writer.Write(label.PadRight(6));
-                return;
+                _Writer.WriteLine("Suite Lifecycle Errors:");
+                foreach (SuiteLifecycleError error in summary.LifecycleErrors)
+                    _Writer.WriteLine("  " + _Redact(error.SuiteId) + " " + error.Stage + ": " + _Redact(error.Exception.Message));
             }
 
-            ConsoleColor previous = Console.ForegroundColor;
-            Console.ForegroundColor = color;
-            _Writer.Write(label.PadRight(6));
-            Console.ForegroundColor = previous;
+            return default;
+        }
+
+        private void WriteStatus(string label, string color)
+        {
+            if (_UseColor)
+                _Writer.Write(color + label.PadRight(ResultColumnWidth) + AnsiReset);
+            else
+                _Writer.Write(label.PadRight(ResultColumnWidth));
+        }
+
+        private static string ColorOf(TestOutcome outcome)
+        {
+            switch (outcome)
+            {
+                case TestOutcome.Passed: return AnsiGreen;
+                case TestOutcome.Failed: return AnsiRed;
+                default: return AnsiYellow;
+            }
+        }
+
+        private static string Number(int value)
+        {
+            return value.ToString(CultureInfo.InvariantCulture);
         }
 
         private static string FormatRuntime(TimeSpan runtime)
         {
             long ms = (long)Math.Round(runtime.TotalMilliseconds, MidpointRounding.AwayFromZero);
-            return ms.ToString() + "ms";
+            return ms.ToString(CultureInfo.InvariantCulture) + "ms";
         }
 
-        private static string FormatDescription(string description, int descriptionWidth)
+        private static string FormatDescription(string description, int width)
         {
-            if (string.IsNullOrEmpty(description))
-                return string.Empty.PadRight(descriptionWidth);
-
-            if (description.Length <= descriptionWidth)
-                return description.PadRight(descriptionWidth);
-
-            if (descriptionWidth <= 3)
-                return description.Substring(0, descriptionWidth);
-
-            return description.Substring(0, descriptionWidth - 3) + "...";
+            if (description.Length <= width) return description.PadRight(width);
+            if (width <= 3) return description.Substring(0, width);
+            return description.Substring(0, width - 3) + "...";
         }
 
-        private static int GetMaximumDescriptionWidth()
+        private static int DescriptionWidth(bool isConsole)
         {
-            const int ResultColumnWidth = 6;
-            const int RuntimeColumnWidth = 8;
-            const int SeparatorWidth = 4;
-            const int MinimumDescriptionWidth = 40;
-            const int DefaultDescriptionWidth = 100;
+            if (!isConsole) return DefaultDescriptionWidth;
 
             try
             {
-                if (Console.IsOutputRedirected)
-                    return DefaultDescriptionWidth;
-
+                if (Console.IsOutputRedirected) return DefaultDescriptionWidth;
                 int available = Console.WindowWidth - ResultColumnWidth - RuntimeColumnWidth - SeparatorWidth;
                 return available < MinimumDescriptionWidth ? MinimumDescriptionWidth : available;
             }
