@@ -5,6 +5,9 @@
     <Description>MSTest adapter for Touchstone. Run shared test descriptors under MSTest using DynamicData or single-test patterns.</Description>
     <PackageTags>testing;mstest;test-adapter;descriptors</PackageTags>
     <IsPackable>true</IsPackable>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
   <ItemGroup>

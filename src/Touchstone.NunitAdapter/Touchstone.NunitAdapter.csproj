@@ -5,6 +5,9 @@
     <Description>NUnit adapter for Touchstone. Run shared test descriptors under NUnit using TestCaseSource or single-test patterns.</Description>
     <PackageTags>testing;nunit;test-adapter;descriptors</PackageTags>
     <IsPackable>true</IsPackable>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
   <ItemGroup>
